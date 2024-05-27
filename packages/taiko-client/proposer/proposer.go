@@ -5,8 +5,13 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"net/http"
+	"strconv"
 	"sync"
 	"time"
+
+	gorilla_rcp "github.com/gorilla/rpc"
+	"github.com/gorilla/rpc/json"
 
 	"github.com/ethereum-optimism/optimism/op-service/txmgr"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -159,9 +164,43 @@ func (p *Proposer) InitFromConfig(ctx context.Context, cfg *Config) (err error) 
 
 // Start starts the proposer's main loop.
 func (p *Proposer) Start() error {
-	p.wg.Add(1)
-	go p.eventLoop()
+	log.Info("Proposer main loop started")
+	startRPCServer(p)
+
+	// p.wg.Add(1)
+	// go p.eventLoop()
 	return nil
+}
+
+// Args represents the arguments to be passed to the RPC method.
+type Args struct {
+	BlockNumber int
+}
+
+type RPCReply struct {
+	Message string
+}
+
+// ProposerRPC is the receiver type for the RPC methods.
+type ProposerRPC struct {
+	// proposer *Proposer
+}
+
+func (p *ProposerRPC) GetL2Block(r *http.Request, args *Args, reply *string) error {
+	log.Info("Received BlockNumber", "BlockNumber", args.BlockNumber)
+	*reply = "L2 Block data for block number: " + strconv.Itoa(args.BlockNumber)
+	return nil
+}
+
+func startRPCServer(proposer *Proposer) {
+	s := gorilla_rcp.NewServer()
+	s.RegisterCodec(json.NewCodec(), "application/json")
+	proposerRPC := &ProposerRPC{}
+	s.RegisterService(proposerRPC, "")
+
+	http.Handle("/rpc", s)
+	log.Info("Starting JSON-RPC server on port 1234 v4")
+	go http.ListenAndServe(":1234", nil)
 }
 
 // eventLoop starts the main loop of Taiko proposer.
