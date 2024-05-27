@@ -181,25 +181,39 @@ type RPCReply struct {
 	Message string
 }
 
-// ProposerRPC is the receiver type for the RPC methods.
-type ProposerRPC struct {
-	// proposer *Proposer
+type RPCReplyL2Block struct {
+	TxLists []types.Transactions
 }
 
-func (p *ProposerRPC) GetL2Block(r *http.Request, args *Args, reply *string) error {
+// ProposerRPC is the receiver type for the RPC methods.
+type ProposerRPC struct {
+	proposer *Proposer
+}
+
+func (p *ProposerRPC) GetL2BlockNumber(r *http.Request, args *Args, reply *string) error {
 	log.Info("Received BlockNumber", "BlockNumber", args.BlockNumber)
 	*reply = "L2 Block data for block number: " + strconv.Itoa(args.BlockNumber)
+	return nil
+}
+
+func (p *ProposerRPC) GetL2Block(r *http.Request, args *Args, reply *RPCReplyL2Block) error {
+	txLists, err := p.proposer.ProposeOpForTakingL2Blocks(context.Background())
+	if err != nil {
+		return err
+	}
+	log.Info("Received BlockNumber L2 txLists ", "txListsLength", len(txLists))
+	*reply = RPCReplyL2Block{TxLists: txLists}
 	return nil
 }
 
 func startRPCServer(proposer *Proposer) {
 	s := gorilla_rcp.NewServer()
 	s.RegisterCodec(json.NewCodec(), "application/json")
-	proposerRPC := &ProposerRPC{}
+	proposerRPC := &ProposerRPC{proposer: proposer}
 	s.RegisterService(proposerRPC, "")
 
 	http.Handle("/rpc", s)
-	log.Info("Starting JSON-RPC server on port 1234 v4")
+	log.Info("Starting JSON-RPC server on port 1234 v5")
 	go http.ListenAndServe(":1234", nil)
 }
 
@@ -368,6 +382,25 @@ func (p *Proposer) ProposeOp(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (p *Proposer) ProposeOpForTakingL2Blocks(ctx context.Context) ([]types.Transactions, error) {
+	log.Info("ProposeOpForTakingL2Blocks")
+	// Check if it's time to propose unfiltered pool content.
+	filterPoolContent := time.Now().Before(p.lastProposedAt.Add(p.MinProposingInternal))
+
+	// Wait until L2 execution engine is synced at first.
+	if err := p.rpc.WaitTillL2ExecutionEngineSynced(ctx); err != nil {
+		return nil, fmt.Errorf("failed to wait until L2 execution engine synced: %w", err)
+	}
+
+	log.Info(
+		"Start fetching L2 execution engine's transaction pool content",
+		"filterPoolContent", filterPoolContent,
+		"lastProposedAt", p.lastProposedAt,
+	)
+
+	return p.fetchPoolContent(filterPoolContent)
 }
 
 // ProposeTxList proposes the given transactions list to TaikoL1 smart contract.
