@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -164,7 +163,6 @@ func (p *Proposer) InitFromConfig(ctx context.Context, cfg *Config) (err error) 
 
 // Start starts the proposer's main loop.
 func (p *Proposer) Start() error {
-	log.Info("Proposer main loop started")
 	startRPCServer(p)
 
 	// p.wg.Add(1)
@@ -174,14 +172,9 @@ func (p *Proposer) Start() error {
 
 // Args represents the arguments to be passed to the RPC method.
 type Args struct {
-	BlockNumber int
 }
 
-type RPCReply struct {
-	Message string
-}
-
-type RPCReplyL2Block struct {
+type RPCReplyL2TxLists struct {
 	TxLists []types.Transactions
 }
 
@@ -190,21 +183,17 @@ type ProposerRPC struct {
 	proposer *Proposer
 }
 
-func (p *ProposerRPC) GetL2BlockNumber(r *http.Request, args *Args, reply *string) error {
-	log.Info("Received BlockNumber", "BlockNumber", args.BlockNumber)
-	*reply = "L2 Block data for block number: " + strconv.Itoa(args.BlockNumber)
-	return nil
-}
-
-func (p *ProposerRPC) GetL2Block(r *http.Request, args *Args, reply *RPCReplyL2Block) error {
+func (p *ProposerRPC) GetL2TxLists(r *http.Request, args *Args, reply *RPCReplyL2TxLists) error {
 	txLists, err := p.proposer.ProposeOpForTakingL2Blocks(context.Background())
 	if err != nil {
 		return err
 	}
-	log.Info("Received BlockNumber L2 txLists ", "txListsLength", len(txLists))
-	*reply = RPCReplyL2Block{TxLists: txLists}
+	log.Info("Received L2 txLists ", "txListsLength", len(txLists))
+	*reply = RPCReplyL2TxLists{TxLists: txLists}
 	return nil
 }
+
+const rpcPort = 1234
 
 func startRPCServer(proposer *Proposer) {
 	s := gorilla_rcp.NewServer()
@@ -213,8 +202,8 @@ func startRPCServer(proposer *Proposer) {
 	s.RegisterService(proposerRPC, "")
 
 	http.Handle("/rpc", s)
-	log.Info("Starting JSON-RPC server on port 1234 v5")
-	go http.ListenAndServe(":1234", nil)
+	log.Info("Starting JSON-RPC server", "port", rpcPort)
+	go http.ListenAndServe(fmt.Sprintf(":%d", rpcPort), nil)
 }
 
 // eventLoop starts the main loop of Taiko proposer.

@@ -9,13 +9,11 @@ headers = {
     "Content-Type": "application/json",
 }
 
-# Define the payload for the `GetL2Block` method
+# Define the payload for the `GetL2TxLists` method
 payload = {
     "jsonrpc": "2.0",
-    "method": "ProposerRPC.GetL2Block",
-    "params": [
-        {"BlockNumber": 2342}
-    ],
+    "method": "ProposerRPC.GetL2TxLists",
+    "params": [],
     "id": 1,
 }
 
@@ -29,7 +27,6 @@ print(f"Response: {response.text}")
 
 if response.status_code != 200:
     print(f"Error: {response.status_code}")
-    # print(f"Response: {response.text}")
 else:
     print("Request was successful.")
 
