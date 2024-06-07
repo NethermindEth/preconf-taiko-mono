@@ -403,6 +403,133 @@ func (s *Syncer) insertNewHead(
 	return payload, nil
 }
 
+func (s *Syncer) moveTheHead(
+	ctx context.Context,
+	txList []*types.Transaction,
+	event *bindings.TaikoL1ClientBlockProposed,
+	// endIter eventIterator.EndBlockProposedEventIterFunc,
+) error {
+	// We simply ignore the genesis block's `BlockProposed` event.
+	if event.BlockId.Cmp(common.Big0) == 0 {
+		return nil
+	}
+
+	// If we are not inserting a block whose parent block is the latest verified block in protocol,
+	// and the node hasn't just finished the P2P sync, we check if the L1 chain has been reorged.
+	// POC: don't care about reorg for now
+	// if !s.progressTracker.Triggered() {
+	// 	reorgCheckResult, err := s.checkReorg(ctx, event)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+
+	// 	if reorgCheckResult.IsReorged {
+	// 		log.Info(
+	// 			"Reset L1Current cursor due to L1 reorg",
+	// 			"l1CurrentHeightOld", s.state.GetL1Current().Number,
+	// 			"l1CurrentHashOld", s.state.GetL1Current().Hash(),
+	// 			"l1CurrentHeightNew", reorgCheckResult.L1CurrentToReset.Number,
+	// 			"l1CurrentHashNew", reorgCheckResult.L1CurrentToReset.Hash(),
+	// 			"lastInsertedBlockIDOld", s.lastInsertedBlockID,
+	// 			"lastInsertedBlockIDNew", reorgCheckResult.LastHandledBlockIDToReset,
+	// 		)
+	// 		s.state.SetL1Current(reorgCheckResult.L1CurrentToReset)
+	// 		s.lastInsertedBlockID = reorgCheckResult.LastHandledBlockIDToReset
+	// 		s.reorgDetectedFlag = true
+	// 		endIter()
+
+	// 		return nil
+	// 	}
+	// }
+	
+	// Ignore those already inserted blocks.
+	if s.lastInsertedBlockID != nil && event.BlockId.Cmp(s.lastInsertedBlockID) <= 0 {
+		return nil
+	}
+
+	log.Info(
+		"New BlockProposed event",
+		"l1Height", event.Raw.BlockNumber,
+		"l1Hash", event.Raw.BlockHash,
+		"blockID", event.BlockId,
+		"removed", event.Raw.Removed,
+	)
+
+	// If the event's timestamp is in the future, we wait until the timestamp is reached, should
+	// only happen when testing.
+	if event.Meta.Timestamp > uint64(time.Now().Unix()) {
+		log.Warn("Future L2 block, waiting", "L2BlockTimestamp", event.Meta.Timestamp, "now", time.Now().Unix())
+		time.Sleep(time.Until(time.Unix(int64(event.Meta.Timestamp), 0)))
+	}
+
+	// Fetch the L2 parent block, if the node is just finished a P2P sync, we simply use the tracker's
+	// last synced verified block as the parent, otherwise, we fetch the parent block from L2 EE.
+	var (
+		parent *types.Header
+		err    error
+	)
+	if s.progressTracker.Triggered() {
+		// Already synced through beacon sync, just skip this event.
+		if event.BlockId.Cmp(s.progressTracker.LastSyncedBlockID()) <= 0 {
+			return nil
+		}
+
+		parent, err = s.rpc.L2.HeaderByHash(ctx, s.progressTracker.LastSyncedBlockHash())
+	} else {
+		parent, err = s.rpc.L2ParentByBlockID(ctx, event.BlockId)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to fetch L2 parent block: %w", err)
+	}
+
+	log.Debug(
+		"Parent block",
+		"height", parent.Number,
+		"hash", parent.Hash(),
+		"beaconSyncTriggered", s.progressTracker.Triggered(),
+	)
+
+
+	// try to insert a new head block to L2 EE.
+	payloadData, err := s.insertNewHeadUsingDecodedTxList(
+		ctx,
+		event,
+		parent,
+		s.state.GetHeadBlockID(),
+		txList,
+		&rawdb.L1Origin{
+			BlockID:       event.BlockId,
+			L2BlockHash:   common.Hash{}, // Will be set by taiko-geth.
+			L1BlockHeight: new(big.Int).SetUint64(event.Raw.BlockNumber),
+			L1BlockHash:   event.Raw.BlockHash,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to insert new head to L2 execution engine: %w", err)
+	}
+
+	log.Debug("Payload data", "hash", payloadData.BlockHash, "txs", len(payloadData.Transactions))
+
+	log.Info(
+		"🔗 New L2 block inserted",
+		"blockID", event.BlockId,
+		"height", payloadData.Number,
+		"hash", payloadData.BlockHash,
+		"transactions", len(payloadData.Transactions),
+		"baseFee", utils.WeiToGWei(payloadData.BaseFeePerGas),
+		"withdrawals", len(payloadData.Withdrawals),
+	)
+
+	metrics.DriverL1CurrentHeightGauge.Set(float64(event.Raw.BlockNumber))
+	s.lastInsertedBlockID = event.BlockId
+
+	if s.progressTracker.Triggered() {
+		s.progressTracker.ClearMeta()
+	}
+
+	return nil
+}
+
 // insertNewHead tries to insert a new head block to the L2 execution engine's local
 // block chain through Engine APIs.
 func (s *Syncer) insertNewHeadUsingDecodedTxList(
