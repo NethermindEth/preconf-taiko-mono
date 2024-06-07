@@ -400,6 +400,100 @@ func (s *Syncer) insertNewHead(
 	return payload, nil
 }
 
+// insertNewHead tries to insert a new head block to the L2 execution engine's local
+// block chain through Engine APIs.
+func (s *Syncer) insertNewHeadUsingDecodedTxList(
+	ctx context.Context,
+	event *bindings.TaikoL1ClientBlockProposed,
+	parent *types.Header,
+	headBlockID *big.Int,
+	txList []*types.Transaction,
+	l1Origin *rawdb.L1Origin,
+) (*engine.ExecutableData, error) {
+	log.Debug(
+		"Try to insert a new L2 head block",
+		"parentNumber", parent.Number,
+		"parentHash", parent.Hash(),
+		"headBlockID", headBlockID,
+		"l1Origin", l1Origin,
+	)
+
+	// Get L2 baseFee
+	baseFeeInfo, err := s.rpc.TaikoL2.GetBasefee(
+		&bind.CallOpts{BlockNumber: parent.Number, Context: ctx},
+		event.Meta.L1Height,
+		uint32(parent.GasUsed),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get L2 baseFee: %w", encoding.TryParsingCustomError(err))
+	}
+
+	log.Info(
+		"L2 baseFee",
+		"blockID", event.BlockId,
+		"baseFee", utils.WeiToGWei(baseFeeInfo.Basefee),
+		"syncedL1Height", event.Meta.L1Height,
+		"parentGasUsed", parent.GasUsed,
+	)
+
+	// Get withdrawals
+	withdrawals := make(types.Withdrawals, len(event.DepositsProcessed))
+	for i, d := range event.DepositsProcessed {
+		withdrawals[i] = &types.Withdrawal{Address: d.Recipient, Amount: d.Amount.Uint64(), Index: d.Id}
+	}
+
+	// Assemble a TaikoL2.anchor transaction
+	anchorTx, err := s.anchorConstructor.AssembleAnchorTx(
+		ctx,
+		new(big.Int).SetUint64(event.Meta.L1Height),
+		event.Meta.L1Hash,
+		new(big.Int).Add(parent.Number, common.Big1),
+		baseFeeInfo.Basefee,
+		parent.GasUsed,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TaikoL2.anchor transaction: %w", err)
+	}
+
+	// Insert the anchor transaction at the head of the transactions list
+	txList = append([]*types.Transaction{anchorTx}, txList...)
+	var txListBytes []byte
+	if txListBytes, err = rlp.EncodeToBytes(txList); err != nil {
+		log.Error("Encode txList error", "blockID", event.BlockId, "error", err)
+		return nil, err
+	}
+
+	payload, err := s.createExecutionPayloads(
+		ctx,
+		event,
+		parent.Hash(),
+		l1Origin,
+		headBlockID,
+		txListBytes,
+		baseFeeInfo.Basefee,
+		withdrawals,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create execution payloads: %w", err)
+	}
+
+	fc := &engine.ForkchoiceStateV1{HeadBlockHash: payload.BlockHash}
+	if err = s.fillForkchoiceState(ctx, event, fc); err != nil {
+		return nil, err
+	}
+
+	// Update the fork choice
+	fcRes, err := s.rpc.L2Engine.ForkchoiceUpdate(ctx, fc, nil)
+	if err != nil {
+		return nil, err
+	}
+	if fcRes.PayloadStatus.Status != engine.VALID {
+		return nil, fmt.Errorf("unexpected ForkchoiceUpdate response status: %s", fcRes.PayloadStatus.Status)
+	}
+
+	return payload, nil
+}
+
 // fillForkchoiceState fills the forkchoice state with the finalized block hash and the safe block hash.
 func (s *Syncer) fillForkchoiceState(
 	ctx context.Context,
