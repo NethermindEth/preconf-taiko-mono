@@ -2,8 +2,13 @@ package driver
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"sync"
 	"time"
+
+	gorilla_rcp "github.com/gorilla/rpc"
+	"github.com/gorilla/rpc/json"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -93,6 +98,7 @@ func (d *Driver) InitFromConfig(ctx context.Context, cfg *Config) (err error) {
 
 // Start starts the driver instance.
 func (d *Driver) Start() error {
+	go d.startRPCServer()
 	go d.eventLoop()
 	go d.reportProtocolStatus()
 	go d.exchangeTransitionConfigLoop()
@@ -257,4 +263,33 @@ func (d *Driver) exchangeTransitionConfigLoop() {
 // Name returns the application name.
 func (d *Driver) Name() string {
 	return "driver"
+}
+
+// Args represents the arguments to be passed to the RPC method.
+type Args struct {
+	xLists []types.Transactions
+}
+
+// DriverRPC is the receiver type for the RPC methods.
+type DriverRPC struct {
+	driver *Driver
+}
+
+func (p *DriverRPC) AdvanceL2ChainHeadWithNewBlock(r *http.Request, args *Args, reply *string) error {
+
+	*reply = "Request received and processed successfully"
+	return nil
+}
+
+const rpcPort = 1235
+
+func (d *Driver) startRPCServer() {
+	s := gorilla_rcp.NewServer()
+	s.RegisterCodec(json.NewCodec(), "application/json")
+	driverRPC := &DriverRPC{driver: d}
+	s.RegisterService(driverRPC, "")
+
+	http.Handle("/rpc", s)
+	log.Info("Starting JSON-RPC server", "port", rpcPort)
+	go http.ListenAndServe(fmt.Sprintf(":%d", rpcPort), nil)
 }
