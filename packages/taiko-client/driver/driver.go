@@ -276,6 +276,16 @@ type DriverRPC struct {
 }
 
 func (p *DriverRPC) AdvanceL2ChainHeadWithNewBlock(r *http.Request, args *Args, reply *string) error {
+	syncer := p.driver.l2ChainSyncer.BlobSyncer()
+
+	// Call moveTheHead method with the txLists from args
+	for _, txList := range args.xLists {
+		err := syncer.MoveTheHead(p.driver.ctx, txList)
+		if err != nil {
+			log.Error("Failed to move the head with new block", "error", err)
+			return err
+		}
+	}
 
 	*reply = "Request received and processed successfully"
 	return nil

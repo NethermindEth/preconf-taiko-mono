@@ -403,80 +403,33 @@ func (s *Syncer) insertNewHead(
 	return payload, nil
 }
 
-func (s *Syncer) moveTheHead(
+func (s *Syncer) MoveTheHead(
 	ctx context.Context,
 	txList []*types.Transaction,
-	event *bindings.TaikoL1ClientBlockProposed,
-	// endIter eventIterator.EndBlockProposedEventIterFunc,
 ) error {
-	// We simply ignore the genesis block's `BlockProposed` event.
-	if event.BlockId.Cmp(common.Big0) == 0 {
-		return nil
+
+	lastInsertedBlockHeader, err := s.rpc.L1.HeaderByNumber(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to get latest block ID from L1: %w", err)
 	}
 
-	// If we are not inserting a block whose parent block is the latest verified block in protocol,
-	// and the node hasn't just finished the P2P sync, we check if the L1 chain has been reorged.
-	// POC: don't care about reorg for now
-	// if !s.progressTracker.Triggered() {
-	// 	reorgCheckResult, err := s.checkReorg(ctx, event)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-
-	// 	if reorgCheckResult.IsReorged {
-	// 		log.Info(
-	// 			"Reset L1Current cursor due to L1 reorg",
-	// 			"l1CurrentHeightOld", s.state.GetL1Current().Number,
-	// 			"l1CurrentHashOld", s.state.GetL1Current().Hash(),
-	// 			"l1CurrentHeightNew", reorgCheckResult.L1CurrentToReset.Number,
-	// 			"l1CurrentHashNew", reorgCheckResult.L1CurrentToReset.Hash(),
-	// 			"lastInsertedBlockIDOld", s.lastInsertedBlockID,
-	// 			"lastInsertedBlockIDNew", reorgCheckResult.LastHandledBlockIDToReset,
-	// 		)
-	// 		s.state.SetL1Current(reorgCheckResult.L1CurrentToReset)
-	// 		s.lastInsertedBlockID = reorgCheckResult.LastHandledBlockIDToReset
-	// 		s.reorgDetectedFlag = true
-	// 		endIter()
-
-	// 		return nil
-	// 	}
-	// }
-	
 	// Ignore those already inserted blocks.
-	if s.lastInsertedBlockID != nil && event.BlockId.Cmp(s.lastInsertedBlockID) <= 0 {
+	// if s.lastInsertedBlockID != nil && event.BlockId.Cmp(s.lastInsertedBlockID) <= 0 {
+	if s.lastInsertedBlockID != nil && lastInsertedBlockHeader.Number.Cmp(s.lastInsertedBlockID) <= 0 {
 		return nil
-	}
-
-	log.Info(
-		"New BlockProposed event",
-		"l1Height", event.Raw.BlockNumber,
-		"l1Hash", event.Raw.BlockHash,
-		"blockID", event.BlockId,
-		"removed", event.Raw.Removed,
-	)
-
-	// If the event's timestamp is in the future, we wait until the timestamp is reached, should
-	// only happen when testing.
-	if event.Meta.Timestamp > uint64(time.Now().Unix()) {
-		log.Warn("Future L2 block, waiting", "L2BlockTimestamp", event.Meta.Timestamp, "now", time.Now().Unix())
-		time.Sleep(time.Until(time.Unix(int64(event.Meta.Timestamp), 0)))
 	}
 
 	// Fetch the L2 parent block, if the node is just finished a P2P sync, we simply use the tracker's
 	// last synced verified block as the parent, otherwise, we fetch the parent block from L2 EE.
 	var (
 		parent *types.Header
-		err    error
 	)
 	if s.progressTracker.Triggered() {
-		// Already synced through beacon sync, just skip this event.
-		if event.BlockId.Cmp(s.progressTracker.LastSyncedBlockID()) <= 0 {
-			return nil
-		}
-
 		parent, err = s.rpc.L2.HeaderByHash(ctx, s.progressTracker.LastSyncedBlockHash())
 	} else {
-		parent, err = s.rpc.L2ParentByBlockID(ctx, event.BlockId)
+		// taking last block from L2 instead of parent based on L1 block id
+		// parent, err = s.rpc.L2ParentByBlockID(ctx, event.BlockId)
+		parent, err = s.rpc.L2.HeaderByNumber(ctx, nil)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to fetch L2 parent block: %w", err)
@@ -489,39 +442,25 @@ func (s *Syncer) moveTheHead(
 		"beaconSyncTriggered", s.progressTracker.Triggered(),
 	)
 
-
 	// try to insert a new head block to L2 EE.
-	payloadData, err := s.insertNewHeadUsingDecodedTxList(
+	err = s.insertNewHeadUsingDecodedTxList(
 		ctx,
-		event,
 		parent,
 		s.state.GetHeadBlockID(),
 		txList,
 		&rawdb.L1Origin{
-			BlockID:       event.BlockId,
-			L2BlockHash:   common.Hash{}, // Will be set by taiko-geth.
-			L1BlockHeight: new(big.Int).SetUint64(event.Raw.BlockNumber),
-			L1BlockHash:   event.Raw.BlockHash,
+			BlockID:       lastInsertedBlockHeader.Number, // event.BlockId
+			L2BlockHash:   common.Hash{},                  // Will be set by taiko-geth.
+			L1BlockHeight: lastInsertedBlockHeader.Number, // new(big.Int).SetUint64(event.Raw.BlockNumber),
+			L1BlockHash:   lastInsertedBlockHeader.Hash(), // event.Raw.BlockHash,
 		},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert new head to L2 execution engine: %w", err)
 	}
 
-	log.Debug("Payload data", "hash", payloadData.BlockHash, "txs", len(payloadData.Transactions))
-
-	log.Info(
-		"🔗 New L2 block inserted",
-		"blockID", event.BlockId,
-		"height", payloadData.Number,
-		"hash", payloadData.BlockHash,
-		"transactions", len(payloadData.Transactions),
-		"baseFee", utils.WeiToGWei(payloadData.BaseFeePerGas),
-		"withdrawals", len(payloadData.Withdrawals),
-	)
-
-	metrics.DriverL1CurrentHeightGauge.Set(float64(event.Raw.BlockNumber))
-	s.lastInsertedBlockID = event.BlockId
+	metrics.DriverL1CurrentHeightGauge.Set(float64(lastInsertedBlockHeader.Number.Uint64())) //(float64(event.Raw.BlockNumber))
+	s.lastInsertedBlockID = lastInsertedBlockHeader.Number                                   //event.BlockId
 
 	if s.progressTracker.Triggered() {
 		s.progressTracker.ClearMeta()
@@ -534,12 +473,11 @@ func (s *Syncer) moveTheHead(
 // block chain through Engine APIs.
 func (s *Syncer) insertNewHeadUsingDecodedTxList(
 	ctx context.Context,
-	event *bindings.TaikoL1ClientBlockProposed,
 	parent *types.Header,
 	headBlockID *big.Int,
 	txList []*types.Transaction,
 	l1Origin *rawdb.L1Origin,
-) (*engine.ExecutableData, error) {
+) error {
 	log.Debug(
 		"Try to insert a new L2 head block",
 		"parentNumber", parent.Number,
@@ -551,51 +489,50 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 	// Get L2 baseFee
 	baseFeeInfo, err := s.rpc.TaikoL2.GetBasefee(
 		&bind.CallOpts{BlockNumber: parent.Number, Context: ctx},
-		event.Meta.L1Height,
+		l1Origin.BlockID.Uint64(), // event.Meta.L1Height,
 		uint32(parent.GasUsed),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get L2 baseFee: %w", encoding.TryParsingCustomError(err))
+		return fmt.Errorf("failed to get L2 baseFee: %w", encoding.TryParsingCustomError(err))
 	}
 
 	log.Info(
 		"L2 baseFee",
-		"blockID", event.BlockId,
+		"blockID", l1Origin.BlockID, // event.BlockId,
 		"baseFee", utils.WeiToGWei(baseFeeInfo.Basefee),
-		"syncedL1Height", event.Meta.L1Height,
+		"syncedL1Height", l1Origin.BlockID, // event.Meta.L1Height,
 		"parentGasUsed", parent.GasUsed,
 	)
 
 	// Get withdrawals
-	withdrawals := make(types.Withdrawals, len(event.DepositsProcessed))
-	for i, d := range event.DepositsProcessed {
-		withdrawals[i] = &types.Withdrawal{Address: d.Recipient, Amount: d.Amount.Uint64(), Index: d.Id}
-	}
+	withdrawals := types.Withdrawals{}
+	// withdrawals := make(types.Withdrawals, len(l1Origin.DepositsProcessed))
+	// for i, d := range l1Origin.DepositsProcessed {
+	// 	withdrawals[i] = &types.Withdrawal{Address: d.Recipient, Amount: d.Amount.Uint64(), Index: d.Id}
+	// }
 
 	// Assemble a TaikoL2.anchor transaction
-	anchorTx, err := s.anchorConstructor.AssembleAnchorTx(
+	anchorTx, err := s.anchorConstructor.AssembleNullAnchorTx(
 		ctx,
-		new(big.Int).SetUint64(event.Meta.L1Height),
-		event.Meta.L1Hash,
 		new(big.Int).Add(parent.Number, common.Big1),
 		baseFeeInfo.Basefee,
 		parent.GasUsed,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create TaikoL2.anchor transaction: %w", err)
+		return fmt.Errorf("failed to create TaikoL2.anchor transaction: %w", err)
 	}
 
 	// Insert the anchor transaction at the head of the transactions list
 	txList = append([]*types.Transaction{anchorTx}, txList...)
 	var txListBytes []byte
 	if txListBytes, err = rlp.EncodeToBytes(txList); err != nil {
-		log.Error("Encode txList error", "blockID", event.BlockId, "error", err)
-		return nil, err
+		log.Error("Encode txList error", "blockID", l1Origin.BlockID /* event.BlockId,	 */, "error", err)
+		return err
 	}
 
 	payload, err := s.createExecutionPayloads(
 		ctx,
-		event,
+		nil,
 		parent.Hash(),
 		l1Origin,
 		headBlockID,
@@ -604,51 +541,23 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 		withdrawals,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create execution payloads: %w", err)
+		return fmt.Errorf("failed to create execution payloads: %w", err)
 	}
 
-	fc := &engine.ForkchoiceStateV1{HeadBlockHash: payload.BlockHash}
-	if err = s.fillForkchoiceState(ctx, event, fc); err != nil {
-		return nil, err
+	fc := &engine.ForkchoiceStateV1{
+		HeadBlockHash:      payload.BlockHash,
+		SafeBlockHash:      payload.BlockHash,
+		FinalizedBlockHash: payload.BlockHash,
 	}
 
 	// Update the fork choice
 	fcRes, err := s.rpc.L2Engine.ForkchoiceUpdate(ctx, fc, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if fcRes.PayloadStatus.Status != engine.VALID {
-		return nil, fmt.Errorf("unexpected ForkchoiceUpdate response status: %s", fcRes.PayloadStatus.Status)
+		return fmt.Errorf("unexpected ForkchoiceUpdate response status: %s", fcRes.PayloadStatus.Status)
 	}
-
-	return payload, nil
-}
-
-// fillForkchoiceState fills the forkchoice state with the finalized block hash and the safe block hash.
-func (s *Syncer) fillForkchoiceState(
-	ctx context.Context,
-	event *bindings.TaikoL1ClientBlockProposed,
-	fc *engine.ForkchoiceStateV1,
-) error {
-	// If the event is emitted from the genesis block, we don't need to fill the forkchoice state,
-	// should only happen when testing.
-	if event.Raw.BlockNumber == 0 {
-		return nil
-	}
-
-	// Fetch the latest verified block's header from protocol.
-	variables, err := s.rpc.GetTaikoDataSlotBByNumber(ctx, event.Raw.BlockNumber)
-	if err != nil {
-		return err
-	}
-	finalizeHeader, err := s.rpc.L2.HeaderByNumber(ctx, new(big.Int).SetUint64(variables.LastVerifiedBlockId))
-	if err != nil {
-		return err
-	}
-
-	// Fill the forkchoice state.
-	fc.FinalizedBlockHash = finalizeHeader.Hash()
-	fc.SafeBlockHash = finalizeHeader.ParentHash
 
 	return nil
 }
@@ -666,40 +575,62 @@ func (s *Syncer) createExecutionPayloads(
 	withdrawals types.Withdrawals,
 ) (payloadData *engine.ExecutableData, err error) {
 	fc := &engine.ForkchoiceStateV1{HeadBlockHash: parentHash}
-	attributes := &engine.PayloadAttributes{
-		Timestamp:             event.Meta.Timestamp,
-		Random:                event.Meta.Difficulty,
-		SuggestedFeeRecipient: event.Meta.Coinbase,
-		Withdrawals:           withdrawals,
-		BlockMetadata: &engine.BlockMetadata{
-			HighestBlockID: headBlockID,
-			Beneficiary:    event.Meta.Coinbase,
-			GasLimit:       uint64(event.Meta.GasLimit) + consensus.AnchorGasLimit,
-			Timestamp:      event.Meta.Timestamp,
-			TxList:         txListBytes,
-			MixHash:        event.Meta.Difficulty,
-			ExtraData:      event.Meta.ExtraData[:],
-		},
-		BaseFeePerGas: baseFee,
-		L1Origin:      l1Origin,
-	}
 
-	log.Debug(
-		"PayloadAttributes",
-		"blockID", event.BlockId,
-		"timestamp", attributes.Timestamp,
-		"random", attributes.Random,
-		"suggestedFeeRecipient", attributes.SuggestedFeeRecipient,
-		"withdrawals", len(attributes.Withdrawals),
-		"highestBlockID", attributes.BlockMetadata.HighestBlockID,
-		"gasLimit", attributes.BlockMetadata.GasLimit,
-		"timestamp", attributes.BlockMetadata.Timestamp,
-		"mixHash", attributes.BlockMetadata.MixHash,
-		"baseFee", utils.WeiToGWei(attributes.BaseFeePerGas),
-		"extraData", string(attributes.BlockMetadata.ExtraData),
-		"l1OriginHeight", attributes.L1Origin.L1BlockHeight,
-		"l1OriginHash", attributes.L1Origin.L1BlockHash,
-	)
+	var attributes *engine.PayloadAttributes
+	if event == nil {
+		attributes = &engine.PayloadAttributes{
+			Timestamp:             0,
+			Random:                common.Hash{},
+			SuggestedFeeRecipient: common.Address{},
+			Withdrawals:           withdrawals,
+			BlockMetadata: &engine.BlockMetadata{
+				HighestBlockID: headBlockID,
+				Beneficiary:    common.Address{},
+				GasLimit:       0,
+				Timestamp:      0,
+				TxList:         txListBytes,
+				MixHash:        common.Hash{},
+				ExtraData:      []byte{},
+			},
+			BaseFeePerGas: baseFee,
+			L1Origin:      l1Origin,
+		}
+	} else {
+		attributes = &engine.PayloadAttributes{
+			Timestamp:             event.Meta.Timestamp,
+			Random:                event.Meta.Difficulty,
+			SuggestedFeeRecipient: event.Meta.Coinbase,
+			Withdrawals:           withdrawals,
+			BlockMetadata: &engine.BlockMetadata{
+				HighestBlockID: headBlockID,
+				Beneficiary:    event.Meta.Coinbase,
+				GasLimit:       uint64(event.Meta.GasLimit) + consensus.AnchorGasLimit,
+				Timestamp:      event.Meta.Timestamp,
+				TxList:         txListBytes,
+				MixHash:        event.Meta.Difficulty,
+				ExtraData:      event.Meta.ExtraData[:],
+			},
+			BaseFeePerGas: baseFee,
+			L1Origin:      l1Origin,
+		}
+
+		log.Debug(
+			"PayloadAttributes",
+			"blockID", event.BlockId,
+			"timestamp", attributes.Timestamp,
+			"random", attributes.Random,
+			"suggestedFeeRecipient", attributes.SuggestedFeeRecipient,
+			"withdrawals", len(attributes.Withdrawals),
+			"highestBlockID", attributes.BlockMetadata.HighestBlockID,
+			"gasLimit", attributes.BlockMetadata.GasLimit,
+			"timestamp", attributes.BlockMetadata.Timestamp,
+			"mixHash", attributes.BlockMetadata.MixHash,
+			"baseFee", utils.WeiToGWei(attributes.BaseFeePerGas),
+			"extraData", string(attributes.BlockMetadata.ExtraData),
+			"l1OriginHeight", attributes.L1Origin.L1BlockHeight,
+			"l1OriginHash", attributes.L1Origin.L1BlockHash,
+		)
+	}
 
 	// Step 1, prepare a payload
 	fcRes, err := s.rpc.L2Engine.ForkchoiceUpdate(ctx, fc, attributes)
@@ -719,17 +650,19 @@ func (s *Syncer) createExecutionPayloads(
 		return nil, fmt.Errorf("failed to get payload: %w", err)
 	}
 
-	log.Debug(
-		"Payload",
-		"blockID", event.BlockId,
-		"baseFee", utils.WeiToGWei(payload.BaseFeePerGas),
-		"number", payload.Number,
-		"hash", payload.BlockHash,
-		"gasLimit", payload.GasLimit,
-		"gasUsed", payload.GasUsed,
-		"timestamp", payload.Timestamp,
-		"withdrawalsHash", payload.WithdrawalsHash,
-	)
+	if event != nil {
+		log.Debug(
+			"Payload",
+			"blockID", event.BlockId,
+			"baseFee", utils.WeiToGWei(payload.BaseFeePerGas),
+			"number", payload.Number,
+			"hash", payload.BlockHash,
+			"gasLimit", payload.GasLimit,
+			"gasUsed", payload.GasUsed,
+			"timestamp", payload.Timestamp,
+			"withdrawalsHash", payload.WithdrawalsHash,
+		)
+	}
 
 	// Step 3, execute the payload
 	execStatus, err := s.rpc.L2Engine.NewPayload(ctx, payload)
