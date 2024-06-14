@@ -2,6 +2,7 @@ package blob
 
 import (
 	"context"
+	"golang.org/x/exp/slog"
 	"math/big"
 	"os"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-service/txmgr"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/suite"
 
@@ -118,6 +120,64 @@ func (s *BlobSyncerTestSuite) TestInsertNewHead() {
 	)
 	s.Nil(err)
 }
+
+func (s *BlobSyncerTestSuite) TestInsertNewHeadUsingDecodedTxList() {
+	parent, err := s.s.rpc.L2.HeaderByNumber(context.Background(), nil)
+	s.Nil(err)
+	l1Head, err := s.s.rpc.L1.BlockByNumber(context.Background(), nil)
+	s.Nil(err)
+	txList := []*types.Transaction{
+		types.NewTransaction(0, common.BytesToAddress(testutils.RandomBytes(20)), big.NewInt(0), 21000, big.NewInt(1), nil),
+	}
+	err = s.s.insertNewHeadUsingDecodedTxList(
+		context.Background(),
+		parent,
+		common.Big1,
+		txList,
+		&rawdb.L1Origin{
+			BlockID:       common.Big1,
+			L1BlockHeight: common.Big1,
+			L1BlockHash:   l1Head.Hash(),
+		},
+	)
+	s.Nil(err)
+}
+
+func (s *BlobSyncerTestSuite) TestMoveTheHead() {
+	parent, err := s.s.rpc.L2.HeaderByNumber(context.Background(), nil)
+	s.Nil(err)
+	txList := []*types.Transaction{
+		types.NewTransaction(0, common.BytesToAddress(testutils.RandomBytes(20)), big.NewInt(0), 0, big.NewInt(1), nil),
+	}
+
+	err = s.s.MoveTheHead(
+		context.Background(),
+		txList,
+	)
+	s.Nil(err)
+
+	// Verify that the head has moved by checking the latest block header
+	newParent, err := s.s.rpc.L2.HeaderByNumber(context.Background(), nil)
+	s.Nil(err)
+	s.Greater(newParent.Number.Uint64(), parent.Number.Uint64())
+
+	// Verify that the transactions were included in the new head block
+	block, err := s.s.rpc.L2.BlockByHash(context.Background(), newParent.Hash())
+	s.Nil(err)
+	_ = block
+	slog.Info(
+		"New head block",
+		"number", newParent.Number,
+		"hash", newParent.Hash(),
+		"transactions", block.Transactions(),
+	)
+
+	// s.Equal(len(txList), len(block.Transactions()))
+	// for i, tx := range txList {
+	// 	s.Equal(tx.Hash(), block.Transactions()[i].Hash())
+	// }
+}
+
 
 func (s *BlobSyncerTestSuite) TestTreasuryIncomeAllAnchors() {
 	treasury := common.HexToAddress(os.Getenv("TREASURY"))

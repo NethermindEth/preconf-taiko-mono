@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"time"
 
+	"golang.org/x/exp/slog"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/beacon/engine"
@@ -524,11 +526,16 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 
 	// Insert the anchor transaction at the head of the transactions list
 	txList = append([]*types.Transaction{anchorTx}, txList...)
+
+	slog.Debug("Transaction List", "txList", txList)
+
 	var txListBytes []byte
 	if txListBytes, err = rlp.EncodeToBytes(txList); err != nil {
 		log.Error("Encode txList error", "blockID", l1Origin.BlockID /* event.BlockId,	 */, "error", err)
 		return err
 	}
+
+	slog.Debug("txListBytes length", "length", len(txListBytes))
 
 	payload, err := s.createExecutionPayloads(
 		ctx,
@@ -586,7 +593,7 @@ func (s *Syncer) createExecutionPayloads(
 			BlockMetadata: &engine.BlockMetadata{
 				HighestBlockID: headBlockID,
 				Beneficiary:    common.Address{},
-				GasLimit:       0,
+				GasLimit:       240000000 + consensus.AnchorGasLimit, //TODO: replace constant with value from config
 				Timestamp:      0,
 				TxList:         txListBytes,
 				MixHash:        common.Hash{},
@@ -613,6 +620,12 @@ func (s *Syncer) createExecutionPayloads(
 			BaseFeePerGas: baseFee,
 			L1Origin:      l1Origin,
 		}
+
+		log.Debug(
+			"Event GasLimit and Consensus AnchorGasLimit",
+			"eventGasLimit", event.Meta.GasLimit,
+			"consensusAnchorGasLimit", consensus.AnchorGasLimit,
+		)
 
 		log.Debug(
 			"PayloadAttributes",
@@ -672,6 +685,8 @@ func (s *Syncer) createExecutionPayloads(
 	if execStatus.Status != engine.VALID {
 		return nil, fmt.Errorf("unexpected NewPayload response status: %s", execStatus.Status)
 	}
+
+	log.Debug("Payload has been created successfully", "payloadID", fcRes.PayloadID, "blockNumber", payload.Number, "blockHash", payload.BlockHash)
 
 	return payload, nil
 }
