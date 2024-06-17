@@ -2,11 +2,13 @@ package blob
 
 import (
 	"context"
-	"golang.org/x/exp/slog"
+	"crypto/ecdsa"
 	"math/big"
 	"os"
 	"testing"
 	"time"
+
+	"golang.org/x/exp/slog"
 
 	"github.com/ethereum-optimism/optimism/op-service/txmgr"
 	"github.com/ethereum/go-ethereum/common"
@@ -146,9 +148,17 @@ func (s *BlobSyncerTestSuite) TestInsertNewHeadUsingDecodedTxList() {
 func (s *BlobSyncerTestSuite) TestMoveTheHead() {
 	parent, err := s.s.rpc.L2.HeaderByNumber(context.Background(), nil)
 	s.Nil(err)
-	txList := []*types.Transaction{
-		types.NewTransaction(0, common.BytesToAddress(testutils.RandomBytes(20)), big.NewInt(0), 0, big.NewInt(1), nil),
-	}
+
+	// Create a new transaction
+	tx := types.NewTransaction(0, common.BytesToAddress(testutils.RandomBytes(20)), big.NewInt(0), 21000, big.NewInt(1), nil)
+
+	// Sign the transaction
+	privateKey, err := crypto.ToECDSA(common.FromHex(os.Getenv("L1_PROPOSER_PRIVATE_KEY")))
+	s.Nil(err)
+	signedTx, err := s.signTransaction(tx, privateKey)
+	s.Nil(err)
+
+	txList := []*types.Transaction{signedTx}
 
 	err = s.s.MoveTheHead(
 		context.Background(),
@@ -165,19 +175,44 @@ func (s *BlobSyncerTestSuite) TestMoveTheHead() {
 	block, err := s.s.rpc.L2.BlockByHash(context.Background(), newParent.Hash())
 	s.Nil(err)
 	_ = block
-	slog.Info(
+	slog.Debug(
 		"New head block",
 		"number", newParent.Number,
 		"hash", newParent.Hash(),
 		"transactions", block.Transactions(),
 	)
 
-	// s.Equal(len(txList), len(block.Transactions()))
-	// for i, tx := range txList {
-	// 	s.Equal(tx.Hash(), block.Transactions()[i].Hash())
-	// }
+	s.Equal(len(txList)+1, len(block.Transactions())) // anchor tx
+	for i, tx := range txList {
+		s.Equal(tx.Hash(), block.Transactions()[i+1].Hash()) // i+1 because anchor tx is the first tx
+	}
 }
 
+func (s *BlobSyncerTestSuite) signTransaction(tx *types.Transaction, privateKey *ecdsa.PrivateKey) (*types.Transaction, error) {
+	chainID, err := s.FetchChainID()
+	if err != nil {
+		return nil, err
+	}
+	signer := types.NewEIP155Signer(chainID)
+	signedTx, err := types.SignTx(tx, signer, privateKey)
+	if err != nil {
+		return nil, err
+	}
+	return signedTx, nil
+}
+
+// FetchChainID fetches the chain ID from the Ethereum client.
+func (s *BlobSyncerTestSuite) FetchChainID() (*big.Int, error) {
+	var chainID string
+	err := s.RPCClient.L2.CallContext(context.Background(), &chainID, "eth_chainId")
+	if err != nil {
+		return nil, err
+	}
+	id := new(big.Int)
+	id.SetString(chainID[2:], 16) // Convert hex string to big.Int
+	slog.Info("Chain ID", "id", id)
+	return id, nil
+}
 
 func (s *BlobSyncerTestSuite) TestTreasuryIncomeAllAnchors() {
 	treasury := common.HexToAddress(os.Getenv("TREASURY"))

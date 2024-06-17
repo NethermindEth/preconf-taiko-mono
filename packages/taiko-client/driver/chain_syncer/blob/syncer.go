@@ -628,22 +628,25 @@ func (s *Syncer) createExecutionPayloads(
 		)
 
 		log.Debug(
-			"PayloadAttributes",
 			"blockID", event.BlockId,
-			"timestamp", attributes.Timestamp,
-			"random", attributes.Random,
-			"suggestedFeeRecipient", attributes.SuggestedFeeRecipient,
-			"withdrawals", len(attributes.Withdrawals),
-			"highestBlockID", attributes.BlockMetadata.HighestBlockID,
-			"gasLimit", attributes.BlockMetadata.GasLimit,
-			"timestamp", attributes.BlockMetadata.Timestamp,
-			"mixHash", attributes.BlockMetadata.MixHash,
-			"baseFee", utils.WeiToGWei(attributes.BaseFeePerGas),
-			"extraData", string(attributes.BlockMetadata.ExtraData),
-			"l1OriginHeight", attributes.L1Origin.L1BlockHeight,
-			"l1OriginHash", attributes.L1Origin.L1BlockHash,
 		)
+
 	}
+	log.Debug(
+		"PayloadAttributes",
+		"timestamp", attributes.Timestamp,
+		"random", attributes.Random,
+		"suggestedFeeRecipient", attributes.SuggestedFeeRecipient,
+		"withdrawals", len(attributes.Withdrawals),
+		"highestBlockID", attributes.BlockMetadata.HighestBlockID,
+		"gasLimit", attributes.BlockMetadata.GasLimit,
+		"timestamp", attributes.BlockMetadata.Timestamp,
+		"mixHash", attributes.BlockMetadata.MixHash,
+		"baseFee", utils.WeiToGWei(attributes.BaseFeePerGas),
+		"extraData", string(attributes.BlockMetadata.ExtraData),
+		"l1OriginHeight", attributes.L1Origin.L1BlockHeight,
+		"l1OriginHash", attributes.L1Origin.L1BlockHash,
+	)
 
 	// Step 1, prepare a payload
 	fcRes, err := s.rpc.L2Engine.ForkchoiceUpdate(ctx, fc, attributes)
