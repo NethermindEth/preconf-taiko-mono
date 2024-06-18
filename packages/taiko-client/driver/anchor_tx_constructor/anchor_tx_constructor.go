@@ -88,7 +88,13 @@ func (c *AnchorTxConstructor) AssembleNullAnchorTx(
 		"gasUsed", parentGasUsed,
 	)
 
-	return c.rpc.TaikoL2.Anchor(opts, common.BigToHash(common.Big0), common.BigToHash(common.Big0), common.Big0.Uint64(), uint32(parentGasUsed))
+	return c.rpc.TaikoL2.Anchor(
+		opts,
+		common.BigToHash(common.Big0),
+		common.BigToHash(common.Big0),
+		common.Big0.Uint64(),
+		uint32(parentGasUsed),
+	)
 }
 
 // transactOpts is a utility method to create some transact options of the anchor transaction in given L2 block with

@@ -409,7 +409,6 @@ func (s *Syncer) MoveTheHead(
 	ctx context.Context,
 	txList []*types.Transaction,
 ) error {
-
 	lastInsertedBlockHeader, err := s.rpc.L1.HeaderByNumber(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get latest block ID from L1: %w", err)
@@ -461,8 +460,10 @@ func (s *Syncer) MoveTheHead(
 		return fmt.Errorf("failed to insert new head to L2 execution engine: %w", err)
 	}
 
-	metrics.DriverL1CurrentHeightGauge.Set(float64(lastInsertedBlockHeader.Number.Uint64())) //(float64(event.Raw.BlockNumber))
-	s.lastInsertedBlockID = lastInsertedBlockHeader.Number                                   //event.BlockId
+	//(float64(event.Raw.BlockNumber))
+	metrics.DriverL1CurrentHeightGauge.Set(float64(lastInsertedBlockHeader.Number.Uint64()))
+	//event.BlockId
+	s.lastInsertedBlockID = lastInsertedBlockHeader.Number
 
 	if s.progressTracker.Triggered() {
 		s.progressTracker.ClearMeta()
@@ -630,7 +631,6 @@ func (s *Syncer) createExecutionPayloads(
 		log.Debug(
 			"blockID", event.BlockId,
 		)
-
 	}
 	log.Debug(
 		"PayloadAttributes",
@@ -689,7 +689,12 @@ func (s *Syncer) createExecutionPayloads(
 		return nil, fmt.Errorf("unexpected NewPayload response status: %s", execStatus.Status)
 	}
 
-	log.Debug("Payload has been created successfully", "payloadID", fcRes.PayloadID, "blockNumber", payload.Number, "blockHash", payload.BlockHash)
+	log.Debug(
+		"Payload has been created successfully",
+		"payloadID", fcRes.PayloadID,
+		"blockNumber", payload.Number,
+		"blockHash", payload.BlockHash,
+	)
 
 	return payload, nil
 }

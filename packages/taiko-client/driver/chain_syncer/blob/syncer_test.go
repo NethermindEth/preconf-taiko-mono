@@ -150,7 +150,14 @@ func (s *BlobSyncerTestSuite) TestMoveTheHead() {
 	s.Nil(err)
 
 	// Create a new transaction
-	tx := types.NewTransaction(0, common.BytesToAddress(testutils.RandomBytes(20)), big.NewInt(0), 21000, big.NewInt(1), nil)
+	tx := types.NewTransaction(
+		0,
+		common.BytesToAddress(testutils.RandomBytes(20)),
+		big.NewInt(0),
+		21000,
+		big.NewInt(1),
+		nil,
+	)
 
 	// Sign the transaction
 	privateKey, err := crypto.ToECDSA(common.FromHex(os.Getenv("L1_PROPOSER_PRIVATE_KEY")))
@@ -188,7 +195,10 @@ func (s *BlobSyncerTestSuite) TestMoveTheHead() {
 	}
 }
 
-func (s *BlobSyncerTestSuite) signTransaction(tx *types.Transaction, privateKey *ecdsa.PrivateKey) (*types.Transaction, error) {
+func (s *BlobSyncerTestSuite) signTransaction(
+	tx *types.Transaction,
+	privateKey *ecdsa.PrivateKey,
+) (*types.Transaction, error) {
 	chainID, err := s.FetchChainID()
 	if err != nil {
 		return nil, err

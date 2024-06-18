@@ -178,12 +178,12 @@ type RPCReplyL2TxLists struct {
 	TxLists []types.Transactions
 }
 
-// ProposerRPC is the receiver type for the RPC methods.
-type ProposerRPC struct {
+// RPC is the receiver type for the RPC methods.
+type RPC struct {
 	proposer *Proposer
 }
 
-func (p *ProposerRPC) GetL2TxLists(r *http.Request, args *Args, reply *RPCReplyL2TxLists) error {
+func (p *RPC) GetL2TxLists(_ *http.Request, _ *Args, reply *RPCReplyL2TxLists) error {
 	txLists, err := p.proposer.ProposeOpForTakingL2Blocks(context.Background())
 	if err != nil {
 		return err
@@ -198,39 +198,56 @@ const rpcPort = 1234
 func startRPCServer(proposer *Proposer) {
 	s := gorilla_rcp.NewServer()
 	s.RegisterCodec(json.NewCodec(), "application/json")
-	proposerRPC := &ProposerRPC{proposer: proposer}
-	s.RegisterService(proposerRPC, "")
+	proposerRPC := &RPC{proposer: proposer}
+	err := s.RegisterService(proposerRPC, "")
+	if err != nil {
+		log.Error("Failed to register proposer RPC service", "error", err)
+	}
 
 	http.Handle("/rpc", s)
 	log.Info("Starting JSON-RPC server", "port", rpcPort)
-	go http.ListenAndServe(fmt.Sprintf(":%d", rpcPort), nil)
+
+	// Create a custom HTTP server with timeouts
+	server := &http.Server{
+		Addr:         fmt.Sprintf(":%d", rpcPort),
+		Handler:      s,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  15 * time.Second,
+	}
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil {
+			log.Error("Failed to start HTTP server", "error", err)
+		}
+	}()
 }
 
 // eventLoop starts the main loop of Taiko proposer.
-func (p *Proposer) eventLoop() {
-	defer func() {
-		p.proposingTimer.Stop()
-		p.wg.Done()
-	}()
+// func (p *Proposer) eventLoop() {
+// 	defer func() {
+// 		p.proposingTimer.Stop()
+// 		p.wg.Done()
+// 	}()
 
-	for {
-		p.updateProposingTicker()
+// 	for {
+// 		p.updateProposingTicker()
 
-		select {
-		case <-p.ctx.Done():
-			return
-		// proposing interval timer has been reached
-		case <-p.proposingTimer.C:
-			metrics.ProposerProposeEpochCounter.Add(1)
+// 		select {
+// 		case <-p.ctx.Done():
+// 			return
+// 		// proposing interval timer has been reached
+// 		case <-p.proposingTimer.C:
+// 			metrics.ProposerProposeEpochCounter.Add(1)
 
-			// Attempt a proposing operation
-			if err := p.ProposeOp(p.ctx); err != nil {
-				log.Error("Proposing operation error", "error", err)
-				continue
-			}
-		}
-	}
-}
+// 			// Attempt a proposing operation
+// 			if err := p.ProposeOp(p.ctx); err != nil {
+// 				log.Error("Proposing operation error", "error", err)
+// 				continue
+// 			}
+// 		}
+// 	}
+// }
 
 // Close closes the proposer instance.
 func (p *Proposer) Close(_ context.Context) {

@@ -270,12 +270,12 @@ type Args struct {
 	xLists []types.Transactions
 }
 
-// DriverRPC is the receiver type for the RPC methods.
-type DriverRPC struct {
+// RPC is the receiver type for the RPC methods.
+type RPC struct {
 	driver *Driver
 }
 
-func (p *DriverRPC) AdvanceL2ChainHeadWithNewBlock(r *http.Request, args *Args, reply *string) error {
+func (p *RPC) AdvanceL2ChainHeadWithNewBlock(_ *http.Request, args *Args, reply *string) error {
 	syncer := p.driver.l2ChainSyncer.BlobSyncer()
 
 	// Call moveTheHead method with the txLists from args
@@ -296,10 +296,25 @@ const rpcPort = 1235
 func (d *Driver) startRPCServer() {
 	s := gorilla_rcp.NewServer()
 	s.RegisterCodec(json.NewCodec(), "application/json")
-	driverRPC := &DriverRPC{driver: d}
-	s.RegisterService(driverRPC, "")
+	driverRPC := &RPC{driver: d}
+	if err := s.RegisterService(driverRPC, ""); err != nil {
+		log.Error("Failed to register driver RPC service", "error", err)
+	}
 
 	http.Handle("/rpc", s)
 	log.Info("Starting JSON-RPC server", "port", rpcPort)
-	go http.ListenAndServe(fmt.Sprintf(":%d", rpcPort), nil)
+	// Create a custom HTTP server with timeouts
+	server := &http.Server{
+		Addr:         fmt.Sprintf(":%d", rpcPort),
+		Handler:      s,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  15 * time.Second,
+	}
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil {
+			log.Error("Failed to start HTTP server", "error", err)
+		}
+	}()
 }
