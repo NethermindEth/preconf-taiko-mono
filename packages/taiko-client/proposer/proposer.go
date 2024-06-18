@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"sync"
 	"time"
@@ -47,7 +46,7 @@ type Proposer struct {
 	// Private keys and account addresses
 	proposerAddress common.Address
 
-	proposingTimer *time.Timer
+	// proposingTimer *time.Timer
 
 	tiers    []*rpc.TierProviderTierWithID
 	tierFees []encoding.TierFee
@@ -450,22 +449,22 @@ func (p *Proposer) ProposeTxList(
 }
 
 // updateProposingTicker updates the internal proposing timer.
-func (p *Proposer) updateProposingTicker() {
-	if p.proposingTimer != nil {
-		p.proposingTimer.Stop()
-	}
+// func (p *Proposer) updateProposingTicker() {
+// 	if p.proposingTimer != nil {
+// 		p.proposingTimer.Stop()
+// 	}
 
-	var duration time.Duration
-	if p.ProposeInterval != 0 {
-		duration = p.ProposeInterval
-	} else {
-		// Random number between 12 - 120
-		randomSeconds := rand.Intn(120-11) + 12 // nolint: gosec
-		duration = time.Duration(randomSeconds) * time.Second
-	}
+// 	var duration time.Duration
+// 	if p.ProposeInterval != 0 {
+// 		duration = p.ProposeInterval
+// 	} else {
+// 		// Random number between 12 - 120
+// 		randomSeconds := rand.Intn(120-11) + 12 // nolint: gosec
+// 		duration = time.Duration(randomSeconds) * time.Second
+// 	}
 
-	p.proposingTimer = time.NewTimer(duration)
-}
+// 	p.proposingTimer = time.NewTimer(duration)
+// }
 
 // Name returns the application name.
 func (p *Proposer) Name() string {
