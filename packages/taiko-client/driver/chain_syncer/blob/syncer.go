@@ -489,10 +489,15 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 		"l1Origin", l1Origin,
 	)
 
+	l1Height, err := s.rpc.L1.BlockNumber(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get L1 height: %w", err)
+	}
+
 	// Get L2 baseFee
 	baseFeeInfo, err := s.rpc.TaikoL2.GetBasefee(
 		&bind.CallOpts{BlockNumber: parent.Number, Context: ctx},
-		l1Origin.BlockID.Uint64(), // event.Meta.L1Height,
+		l1Height, // event.Meta.L1Height,
 		uint32(parent.GasUsed),
 	)
 	if err != nil {
@@ -667,18 +672,18 @@ func (s *Syncer) createExecutionPayloads(
 	}
 
 	if event != nil {
-		log.Debug(
-			"Payload",
-			"blockID", event.BlockId,
-			"baseFee", utils.WeiToGWei(payload.BaseFeePerGas),
-			"number", payload.Number,
-			"hash", payload.BlockHash,
-			"gasLimit", payload.GasLimit,
-			"gasUsed", payload.GasUsed,
-			"timestamp", payload.Timestamp,
-			"withdrawalsHash", payload.WithdrawalsHash,
-		)
+		log.Debug("Event BlockId", "blockID", event.BlockId)
 	}
+	log.Debug(
+		"Payload",
+		"baseFee", utils.WeiToGWei(payload.BaseFeePerGas),
+		"number", payload.Number,
+		"hash", payload.BlockHash,
+		"gasLimit", payload.GasLimit,
+		"gasUsed", payload.GasUsed,
+		"timestamp", payload.Timestamp,
+		"withdrawalsHash", payload.WithdrawalsHash,
+	)
 
 	// Step 3, execute the payload
 	execStatus, err := s.rpc.L2Engine.NewPayload(ctx, payload)
