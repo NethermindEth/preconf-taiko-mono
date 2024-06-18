@@ -74,7 +74,7 @@ func (c *AnchorTxConstructor) AssembleNullAnchorTx(
 	// Height of the L2 block which including the TaikoL2.anchor transaction.
 	l2Height *big.Int,
 	baseFee *big.Int,
-	parentGasUsed uint64,
+	gasUsed uint64,
 ) (*types.Transaction, error) {
 	opts, err := c.transactOpts(ctx, l2Height, baseFee)
 	if err != nil {
@@ -85,7 +85,7 @@ func (c *AnchorTxConstructor) AssembleNullAnchorTx(
 		"Null anchor arguments",
 		"l2Height", l2Height,
 		"baseFee", utils.WeiToGWei(baseFee),
-		"gasUsed", parentGasUsed,
+		"gasUsed", gasUsed,
 	)
 
 	return c.rpc.TaikoL2.Anchor(
@@ -93,7 +93,7 @@ func (c *AnchorTxConstructor) AssembleNullAnchorTx(
 		common.BigToHash(common.Big0),
 		common.BigToHash(common.Big0),
 		common.Big0.Uint64(),
-		uint32(parentGasUsed),
+		uint32(gasUsed),
 	)
 }
 

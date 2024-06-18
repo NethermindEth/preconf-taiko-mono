@@ -408,6 +408,7 @@ func (s *Syncer) insertNewHead(
 func (s *Syncer) MoveTheHead(
 	ctx context.Context,
 	txList []*types.Transaction,
+	gasUsed uint64,
 ) error {
 	lastInsertedBlockHeader, err := s.rpc.L1.HeaderByNumber(ctx, nil)
 	if err != nil {
@@ -455,6 +456,7 @@ func (s *Syncer) MoveTheHead(
 			L1BlockHeight: lastInsertedBlockHeader.Number, // new(big.Int).SetUint64(event.Raw.BlockNumber),
 			L1BlockHash:   lastInsertedBlockHeader.Hash(), // event.Raw.BlockHash,
 		},
+		gasUsed,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert new head to L2 execution engine: %w", err)
@@ -480,6 +482,7 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 	headBlockID *big.Int,
 	txList []*types.Transaction,
 	l1Origin *rawdb.L1Origin,
+	gasUsed uint64,
 ) error {
 	log.Debug(
 		"Try to insert a new L2 head block",
@@ -524,7 +527,7 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 		ctx,
 		new(big.Int).Add(parent.Number, common.Big1),
 		baseFeeInfo.Basefee,
-		parent.GasUsed,
+		gasUsed,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create TaikoL2.anchor transaction: %w", err)

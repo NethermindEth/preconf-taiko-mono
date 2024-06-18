@@ -267,7 +267,8 @@ func (d *Driver) Name() string {
 
 // Args represents the arguments to be passed to the RPC method.
 type Args struct {
-	xLists []types.Transactions
+	xLists  []types.Transactions
+	gasUsed uint64
 }
 
 // RPC is the receiver type for the RPC methods.
@@ -280,7 +281,7 @@ func (p *RPC) AdvanceL2ChainHeadWithNewBlock(_ *http.Request, args *Args, reply 
 
 	// Call moveTheHead method with the txLists from args
 	for _, txList := range args.xLists {
-		err := syncer.MoveTheHead(p.driver.ctx, txList)
+		err := syncer.MoveTheHead(p.driver.ctx, txList, args.gasUsed)
 		if err != nil {
 			log.Error("Failed to move the head with new block", "error", err)
 			return err
