@@ -3,13 +3,14 @@ package proposer
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
-	gorilla_rcp "github.com/gorilla/rpc"
-	"github.com/gorilla/rpc/json"
+    gorilla_rcp "github.com/gorilla/rpc/v2"
+    "github.com/gorilla/rpc/v2/json2"
 
 	"github.com/ethereum-optimism/optimism/op-service/txmgr"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -177,6 +178,12 @@ type RPCReplyL2TxLists struct {
 	TxLists []types.Transactions
 }
 
+// CustomResponse represents the custom response structure for the RPC method.
+type CustomResponse struct {
+	Result *RPCReplyL2TxLists `json:"result,omitempty"`
+	Error  interface{}        `json:"error,omitempty"`
+}
+
 // RPC is the receiver type for the RPC methods.
 type RPC struct {
 	proposer *Proposer
@@ -196,7 +203,7 @@ const rpcPort = 1234
 
 func startRPCServer(proposer *Proposer) {
 	s := gorilla_rcp.NewServer()
-	s.RegisterCodec(json.NewCodec(), "application/json")
+	s.RegisterCodec(NewCustomCodec(), "application/json")
 	proposerRPC := &RPC{proposer: proposer}
 	err := s.RegisterService(proposerRPC, "")
 	if err != nil {
@@ -220,6 +227,31 @@ func startRPCServer(proposer *Proposer) {
 			log.Error("Failed to start HTTP server", "error", err)
 		}
 	}()
+}
+
+// CustomCodec represents a custom codec for JSON-RPC responses.
+type CustomCodec struct {
+	*json2.Codec
+}
+
+// NewCustomCodec creates a new custom codec.
+func NewCustomCodec() *CustomCodec {
+	return &CustomCodec{json2.NewCodec()}
+}
+
+// WriteResponse writes the custom response.
+func (c *CustomCodec) WriteResponse(w http.ResponseWriter, reply interface{}, methodErr error) error {
+    response := CustomResponse{}
+
+    if methodErr != nil {
+        response.Error = methodErr.Error()
+    } else if reply != nil {
+        response.Result = reply.(*RPCReplyL2TxLists)
+    }
+
+    w.Header().Set("Content-Type", "application/json; charset=utf-8")
+    encoder := json.NewEncoder(w)
+    return encoder.Encode(response)
 }
 
 // eventLoop starts the main loop of Taiko proposer.

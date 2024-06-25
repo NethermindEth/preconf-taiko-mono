@@ -276,7 +276,7 @@ type RPC struct {
 	driver *Driver
 }
 
-func (p *RPC) AdvanceL2ChainHeadWithNewBlock(_ *http.Request, args *Args, reply *string) error {
+func (p *RPC) AdvanceL2ChainHeadWithNewBlocks(_ *http.Request, args *Args, reply *string) error {
 	syncer := p.driver.l2ChainSyncer.BlobSyncer()
 
 	// Call moveTheHead method with the txLists from args

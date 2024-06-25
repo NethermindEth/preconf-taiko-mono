@@ -20,7 +20,7 @@ headers = {
 payload = {
     "jsonrpc": "2.0",
     "method": args.method,
-    "params": [ {"xLists": []}],
+    "params": [ {"txLists": []}],
     "id": 1,
 }
 
