@@ -575,6 +575,8 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 		return fmt.Errorf("unexpected ForkchoiceUpdate response status: %s", fcRes.PayloadStatus.Status)
 	}
 
+	log.Info("🟢 Block head moved by RPC call")
+
 	return nil
 }
 
@@ -594,8 +596,9 @@ func (s *Syncer) createExecutionPayloads(
 
 	var attributes *engine.PayloadAttributes
 	if event == nil {
+		currentTimestamp := uint64(time.Now().Unix())
 		attributes = &engine.PayloadAttributes{
-			Timestamp:             0,
+			Timestamp:             currentTimestamp,
 			Random:                common.Hash{},
 			SuggestedFeeRecipient: common.Address{},
 			Withdrawals:           withdrawals,
@@ -603,7 +606,7 @@ func (s *Syncer) createExecutionPayloads(
 				HighestBlockID: headBlockID,
 				Beneficiary:    common.Address{},
 				GasLimit:       240000000 + consensus.AnchorGasLimit, //TODO: replace constant with value from config
-				Timestamp:      0,
+				Timestamp:      currentTimestamp,
 				TxList:         txListBytes,
 				MixHash:        common.Hash{},
 				ExtraData:      []byte{},

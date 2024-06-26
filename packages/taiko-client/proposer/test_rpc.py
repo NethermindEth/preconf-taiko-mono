@@ -20,7 +20,27 @@ headers = {
 payload = {
     "jsonrpc": "2.0",
     "method": args.method,
-    "params": [ {"txLists": []}],
+    "params": {
+        "TxLists": [
+            [
+                {
+                    "type": "0x0",
+                    "chainId": "0x28c61",
+                    "nonce": "0x1",
+                    "to": "0xbfadd5365bb2890ad832038837115e60b71f7cbb",
+                    "gas": "0x267ac",
+                    "gasPrice": "0x5e76e0800",
+
+                    "value": "0x0",
+                    "input": "0x40d097c30000000000000000000000004cea2c7d358e313f5d0287c475f9ae943fe1a913",
+                    "v": "0x518e6",
+                    "r": "0xb22da5cdc4c091ec85d2dda9054aa497088e55bd9f0335f39864ae1c598dd35",
+                    "s": "0x6eee1bcfe6a1855e89dd23d40942c90a036f273159b4c4fd217d58169493f055",
+                    "hash": "0x7c76b9906579e54df54fe77ad1706c47aca706b3eb5cfd8a30ccc3c5a19e8ecd"
+                }
+            ]
+        ], "gasUsed": 102
+    },
     "id": 1,
 }
 

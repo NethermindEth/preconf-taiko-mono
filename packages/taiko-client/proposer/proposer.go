@@ -178,7 +178,6 @@ type RPCReplyL2TxLists struct {
 	TxLists []types.Transactions
 }
 
-// CustomResponse represents the custom response structure for the RPC method.
 type CustomResponse struct {
 	Result *RPCReplyL2TxLists `json:"result,omitempty"`
 	Error  interface{}        `json:"error,omitempty"`
@@ -229,17 +228,14 @@ func startRPCServer(proposer *Proposer) {
 	}()
 }
 
-// CustomCodec represents a custom codec for JSON-RPC responses.
 type CustomCodec struct {
 	*json2.Codec
 }
 
-// NewCustomCodec creates a new custom codec.
 func NewCustomCodec() *CustomCodec {
 	return &CustomCodec{json2.NewCodec()}
 }
 
-// WriteResponse writes the custom response.
 func (c *CustomCodec) WriteResponse(w http.ResponseWriter, reply interface{}, methodErr error) error {
     response := CustomResponse{}
 

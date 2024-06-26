@@ -2,13 +2,14 @@ package driver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
-	gorilla_rcp "github.com/gorilla/rpc"
-	"github.com/gorilla/rpc/json"
+	gorilla_rcp "github.com/gorilla/rpc/v2"
+	"github.com/gorilla/rpc/v2/json2"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -267,8 +268,8 @@ func (d *Driver) Name() string {
 
 // Args represents the arguments to be passed to the RPC method.
 type Args struct {
-	xLists  []types.Transactions
-	gasUsed uint64
+	TxLists []types.Transactions
+	GasUsed uint64
 }
 
 // RPC is the receiver type for the RPC methods.
@@ -277,11 +278,11 @@ type RPC struct {
 }
 
 func (p *RPC) AdvanceL2ChainHeadWithNewBlocks(_ *http.Request, args *Args, reply *string) error {
+	log.Info("AdvanceL2ChainHeadWithNewBlocks", "args", args)
 	syncer := p.driver.l2ChainSyncer.BlobSyncer()
 
-	// Call moveTheHead method with the txLists from args
-	for _, txList := range args.xLists {
-		err := syncer.MoveTheHead(p.driver.ctx, txList, args.gasUsed)
+	for _, txList := range args.TxLists {
+		err := syncer.MoveTheHead(p.driver.ctx, txList, args.GasUsed)
 		if err != nil {
 			log.Error("Failed to move the head with new block", "error", err)
 			return err
@@ -296,7 +297,7 @@ const rpcPort = 1235
 
 func (d *Driver) startRPCServer() {
 	s := gorilla_rcp.NewServer()
-	s.RegisterCodec(json.NewCodec(), "application/json")
+	s.RegisterCodec(NewCustomCodec(), "application/json")
 	driverRPC := &RPC{driver: d}
 	if err := s.RegisterService(driverRPC, ""); err != nil {
 		log.Error("Failed to register driver RPC service", "error", err)
@@ -318,4 +319,31 @@ func (d *Driver) startRPCServer() {
 			log.Error("Failed to start HTTP server", "error", err)
 		}
 	}()
+}
+
+type CustomResponse struct {
+	Result *string     `json:"result,omitempty"`
+	Error  interface{} `json:"error,omitempty"`
+}
+
+type CustomCodec struct {
+	*json2.Codec
+}
+
+func NewCustomCodec() *CustomCodec {
+	return &CustomCodec{json2.NewCodec()}
+}
+
+func (c *CustomCodec) WriteResponse(w http.ResponseWriter, reply interface{}, methodErr error) error {
+	response := CustomResponse{}
+
+	if methodErr != nil {
+		response.Error = methodErr.Error()
+	} else if reply != nil {
+		response.Result = reply.(*string)
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	encoder := json.NewEncoder(w)
+	return encoder.Encode(response)
 }
