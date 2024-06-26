@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-    gorilla_rcp "github.com/gorilla/rpc/v2"
-    "github.com/gorilla/rpc/v2/json2"
+	gorilla_rcp "github.com/gorilla/rpc/v2"
+	"github.com/gorilla/rpc/v2/json2"
 
 	"github.com/ethereum-optimism/optimism/op-service/txmgr"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -237,17 +237,17 @@ func NewCustomCodec() *CustomCodec {
 }
 
 func (c *CustomCodec) WriteResponse(w http.ResponseWriter, reply interface{}, methodErr error) error {
-    response := CustomResponse{}
+	response := CustomResponse{}
 
-    if methodErr != nil {
-        response.Error = methodErr.Error()
-    } else if reply != nil {
-        response.Result = reply.(*RPCReplyL2TxLists)
-    }
+	if methodErr != nil {
+		response.Error = methodErr.Error()
+	} else if reply != nil {
+		response.Result = reply.(*RPCReplyL2TxLists)
+	}
 
-    w.Header().Set("Content-Type", "application/json; charset=utf-8")
-    encoder := json.NewEncoder(w)
-    return encoder.Encode(response)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	encoder := json.NewEncoder(w)
+	return encoder.Encode(response)
 }
 
 // eventLoop starts the main loop of Taiko proposer.
