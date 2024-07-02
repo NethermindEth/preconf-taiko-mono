@@ -175,8 +175,9 @@ type Args struct {
 }
 
 type RPCReplyL2TxLists struct {
-	TxLists     []types.Transactions
-	TxListBytes [][]byte
+	TxLists        []types.Transactions
+	TxListBytes    [][]byte
+	ParentMetaHash common.Hash
 }
 
 type CustomResponse struct {
@@ -198,7 +199,13 @@ func (p *RPC) GetL2TxLists(_ *http.Request, _ *Args, reply *RPCReplyL2TxLists) e
 	if len(txLists) == 1 {
 		log.Info("Single L2 txList", "txList", txLists[0])
 	}
-	*reply = RPCReplyL2TxLists{TxLists: txLists, TxListBytes: compressedTxLists}
+
+	parentMetaHash, err := builder.GetParentMetaHash(p.proposer.ctx, p.proposer.rpc)
+	if err != nil {
+		return err
+	}
+
+	*reply = RPCReplyL2TxLists{TxLists: txLists, TxListBytes: compressedTxLists, ParentMetaHash: parentMetaHash}
 	return nil
 }
 
@@ -452,6 +459,9 @@ func (p *Proposer) ProposeOpForTakingL2Blocks(ctx context.Context) ([]types.Tran
 	}
 
 	compressedTxLists := [][]byte{}
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get parent meta hash: %w", err)
+	}
 
 	//TODO adjust the Max value
 	for _, txs := range txLists[:utils.Min(p.MaxProposedTxListsPerEpoch, uint64(len(txLists)))] {
