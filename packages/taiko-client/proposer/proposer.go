@@ -453,7 +453,8 @@ func (p *Proposer) ProposeOpForTakingL2Blocks(ctx context.Context) ([]types.Tran
 
 	compressedTxLists := [][]byte{}
 
-	for _, txs := range txLists[:utils.Min(p.MaxProposedTxListsPerEpoch, uint64(len(txLists)))] { //TODO adjust the Max value
+	//TODO adjust the Max value
+	for _, txs := range txLists[:utils.Min(p.MaxProposedTxListsPerEpoch, uint64(len(txLists)))] {
 		txListBytes, err := rlp.EncodeToBytes(txs)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to encode transactions: %w", err)
