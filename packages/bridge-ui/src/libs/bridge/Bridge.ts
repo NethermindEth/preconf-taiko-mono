@@ -1,5 +1,5 @@
 import { getPublicClient, readContract, simulateContract, writeContract } from '@wagmi/core';
-import { getContract, type Hash, UserRejectedRequestError, type WalletClient } from 'viem';
+import { getAddress, getContract, type Hash, UserRejectedRequestError, type WalletClient } from 'viem';
 
 import { bridgeAbi } from '$abi';
 import { routingContractsMap } from '$bridgeConfig';
@@ -40,12 +40,12 @@ export abstract class Bridge {
     const srcChainId = Number(message.srcChainId);
     const destChainId = Number(message.destChainId);
 
-    const { srcOwner } = message;
+    const { srcOwner, destOwner } = message;
     if (!wallet || !wallet.account || !wallet.chain) throw new Error('Wallet is not connected');
 
     const userAddress = wallet.account.address;
-    // Are we the owner of the message?
-    if (srcOwner.toLowerCase() !== userAddress.toLowerCase()) {
+    // Are we the owner of the message, either src or dest?
+    if (getAddress(srcOwner) !== getAddress(userAddress) && getAddress(destOwner) !== getAddress(userAddress)) {
       throw new WrongOwnerError('user cannot process this as it is not their message');
     }
 
@@ -166,7 +166,7 @@ export abstract class Bridge {
   abstract estimateGas(args: BridgeArgs): Promise<bigint>;
   abstract bridge(args: BridgeArgs): Promise<Hash>;
 
-  async processMessage(args: ClaimArgs): Promise<Hash> {
+  async processMessage(args: ClaimArgs, force = false): Promise<Hash> {
     const { messageStatus, destBridgeAddress } = await this.beforeProcessing(args);
     let blockNumber;
 
@@ -203,7 +203,7 @@ export abstract class Bridge {
         // Initial claim
         await this.beforeClaiming({ ...args, messageStatus });
 
-        txHash = await this.processNewMessage({ ...args, bridgeContract, client });
+        txHash = await this.processNewMessage({ ...args, bridgeContract, client }, force);
       } else if (messageStatus === MessageStatus.RETRIABLE) {
         // Claiming after a failed attempt
         await this.beforeRetrying({ ...args, messageStatus });
@@ -225,7 +225,7 @@ export abstract class Bridge {
     }
   }
 
-  private async processNewMessage(args: ProcessMessageType): Promise<Hash> {
+  private async processNewMessage(args: ProcessMessageType, force = false): Promise<Hash> {
     const { bridgeTx, bridgeContract, client } = args;
     const { message } = bridgeTx;
     if (!message) throw new ProcessMessageError('Message is not defined');
@@ -260,25 +260,26 @@ export abstract class Bridge {
       console.error('Failed to estimate gas, using fallback', error);
       estimatedGas = 1_300_000n;
     }
+    if (force) {
+      return await writeContract(config, {
+        address: bridgeContract.address,
+        abi: bridgeContract.abi,
+        functionName: 'processMessage',
+        args: [message, proof],
+        gas: estimatedGas,
+      });
+    } else {
+      const { request } = await simulateContract(config, {
+        address: bridgeContract.address,
+        abi: bridgeContract.abi,
+        functionName: 'processMessage',
+        args: [message, proof],
+        gas: estimatedGas,
+      });
+      log('Simulate contract for processMessage', request);
 
-    const { request } = await simulateContract(config, {
-      address: bridgeContract.address,
-      abi: bridgeContract.abi,
-      functionName: 'processMessage',
-      args: [message, proof],
-      gas: estimatedGas,
-    });
-    log('Simulate contract for processMessage', request);
-
-    return await writeContract(config, request);
-
-    // return await writeContract(config, {
-    //   address: bridgeContract.address,
-    //   abi: bridgeContract.abi,
-    //   functionName: 'processMessage',
-    //   args: [message, proof],
-    //   gas: estimatedGas,
-    // });
+      return await writeContract(config, request);
+    }
   }
 
   private async retryMessage(args: RetryMessageArgs): Promise<Hash> {

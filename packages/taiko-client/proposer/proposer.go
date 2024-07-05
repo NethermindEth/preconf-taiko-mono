@@ -31,11 +31,6 @@ import (
 	builder "github.com/taikoxyz/taiko-mono/packages/taiko-client/proposer/transaction_builder"
 )
 
-var (
-	proverAssignmentTimeout    = 30 * time.Minute
-	requestProverServerTimeout = 12 * time.Second
-)
-
 // Proposer keep proposing new transactions from L2 execution engine's tx pool at a fixed interval.
 type Proposer struct {
 	// configurations
@@ -76,11 +71,11 @@ func (p *Proposer) InitFromCli(ctx context.Context, c *cli.Context) error {
 		return err
 	}
 
-	return p.InitFromConfig(ctx, cfg)
+	return p.InitFromConfig(ctx, cfg, nil)
 }
 
 // InitFromConfig initializes the proposer instance based on the given configurations.
-func (p *Proposer) InitFromConfig(ctx context.Context, cfg *Config) (err error) {
+func (p *Proposer) InitFromConfig(ctx context.Context, cfg *Config, txMgr *txmgr.SimpleTxManager) (err error) {
 	p.proposerAddress = crypto.PubkeyToAddress(cfg.L1ProposerPrivKey.PublicKey)
 	p.ctx = ctx
 	p.Config = cfg
@@ -107,13 +102,17 @@ func (p *Proposer) InitFromConfig(ctx context.Context, cfg *Config) (err error) 
 		return err
 	}
 
-	if p.txmgr, err = txmgr.NewSimpleTxManager(
-		"proposer",
-		log.Root(),
-		&metrics.TxMgrMetrics,
-		*cfg.TxmgrConfigs,
-	); err != nil {
-		return err
+	if txMgr != nil {
+		p.txmgr = txMgr
+	} else {
+		if p.txmgr, err = txmgr.NewSimpleTxManager(
+			"proposer",
+			log.Root(),
+			&metrics.TxMgrMetrics,
+			*cfg.TxmgrConfigs,
+		); err != nil {
+			return err
+		}
 	}
 
 	if p.proverSelector, err = selector.NewETHFeeEOASelector(
@@ -121,13 +120,11 @@ func (p *Proposer) InitFromConfig(ctx context.Context, cfg *Config) (err error) 
 		p.rpc,
 		p.proposerAddress,
 		cfg.TaikoL1Address,
-		cfg.AssignmentHookAddress,
+		cfg.ProverSetAddress,
 		p.tierFees,
 		cfg.TierFeePriceBump,
 		cfg.ProverEndpoints,
 		cfg.MaxTierFeePriceBumps,
-		proverAssignmentTimeout,
-		requestProverServerTimeout,
 	); err != nil {
 		return err
 	}
@@ -139,8 +136,8 @@ func (p *Proposer) InitFromConfig(ctx context.Context, cfg *Config) (err error) 
 			p.proverSelector,
 			p.Config.L1BlockBuilderTip,
 			cfg.TaikoL1Address,
+			cfg.ProverSetAddress,
 			cfg.L2SuggestedFeeRecipient,
-			cfg.AssignmentHookAddress,
 			cfg.ProposeBlockTxGasLimit,
 			cfg.ExtraData,
 		)
@@ -152,7 +149,7 @@ func (p *Proposer) InitFromConfig(ctx context.Context, cfg *Config) (err error) 
 			p.Config.L1BlockBuilderTip,
 			cfg.L2SuggestedFeeRecipient,
 			cfg.TaikoL1Address,
-			cfg.AssignmentHookAddress,
+			cfg.ProverSetAddress,
 			cfg.ProposeBlockTxGasLimit,
 			cfg.ExtraData,
 		)
