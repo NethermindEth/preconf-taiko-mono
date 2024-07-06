@@ -23,9 +23,10 @@ type CalldataTransactionBuilder struct {
 	l1BlockBuilderTip       *big.Int
 	l2SuggestedFeeRecipient common.Address
 	taikoL1Address          common.Address
-	assignmentHookAddress   common.Address
+	proverSetAddress        common.Address
 	gasLimit                uint64
 	extraData               string
+	enabledPreconfirmation  bool
 }
 
 // NewCalldataTransactionBuilder creates a new CalldataTransactionBuilder instance based on giving configurations.
@@ -36,9 +37,10 @@ func NewCalldataTransactionBuilder(
 	l1BlockBuilderTip *big.Int,
 	l2SuggestedFeeRecipient common.Address,
 	taikoL1Address common.Address,
-	assignmentHookAddress common.Address,
+	proverSetAddress common.Address,
 	gasLimit uint64,
 	extraData string,
+	enabledPreconfirmation bool,
 ) *CalldataTransactionBuilder {
 	return &CalldataTransactionBuilder{
 		rpc,
@@ -47,9 +49,10 @@ func NewCalldataTransactionBuilder(
 		l1BlockBuilderTip,
 		l2SuggestedFeeRecipient,
 		taikoL1Address,
-		assignmentHookAddress,
+		proverSetAddress,
 		gasLimit,
 		extraData,
+		enabledPreconfirmation,
 	}
 }
 
@@ -57,32 +60,16 @@ func NewCalldataTransactionBuilder(
 func (b *CalldataTransactionBuilder) Build(
 	ctx context.Context,
 	tierFees []encoding.TierFee,
-	includeParentMetaHash bool,
 	txListBytes []byte,
+	l1StateBlockNumber uint32,
+	timestamp uint64,
+	parentMetaHash [32]byte,
 ) (*txmgr.TxCandidate, error) {
 	// Try to assign a prover.
-	assignment, assignedProver, maxFee, err := b.proverSelector.AssignProver(
+	maxFee, err := b.proverSelector.AssignProver(
 		ctx,
 		tierFees,
-		crypto.Keccak256Hash(txListBytes),
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	// If the current proposer wants to include the parent meta hash, then fetch it from the protocol.
-	var parentMetaHash = [32]byte{}
-	if includeParentMetaHash {
-		if parentMetaHash, err = GetParentMetaHash(ctx, b.rpc); err != nil {
-			return nil, err
-		}
-	}
-
-	// Initially just use the AssignmentHook default.
-	hookInputData, err := encoding.EncodeAssignmentHookInput(&encoding.AssignmentHookInput{
-		Assignment: assignment,
-		Tip:        b.l1BlockBuilderTip,
-	})
 	if err != nil {
 		return nil, err
 	}
@@ -93,29 +80,43 @@ func (b *CalldataTransactionBuilder) Build(
 	}
 	signature[64] = uint8(uint(signature[64])) + 27
 
-	// ABI encode the TaikoL1.proposeBlock parameters.
+	var (
+		to   = &b.taikoL1Address
+		data []byte
+	)
+	if b.proverSetAddress != rpc.ZeroAddress {
+		to = &b.proverSetAddress
+	}
+
+	// ABI encode the TaikoL1.proposeBlock / ProverSet.proposeBlock parameters.
 	encodedParams, err := encoding.EncodeBlockParams(&encoding.BlockParams{
-		AssignedProver: assignedProver,
-		Coinbase:       b.l2SuggestedFeeRecipient,
-		ExtraData:      rpc.StringToBytes32(b.extraData),
-		ParentMetaHash: parentMetaHash,
-		HookCalls:      []encoding.HookCall{{Hook: b.assignmentHookAddress, Data: hookInputData}},
-		Signature:      signature,
+		Coinbase:           b.l2SuggestedFeeRecipient,
+		ExtraData:          rpc.StringToBytes32(b.extraData),
+		ParentMetaHash:     parentMetaHash,
+		Signature:          signature,
+		L1StateBlockNumber: l1StateBlockNumber,
+		Timestamp:          timestamp,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	// Send the transaction to the L1 node.
-	data, err := encoding.TaikoL1ABI.Pack("proposeBlock", encodedParams, txListBytes)
-	if err != nil {
-		return nil, err
+	if b.proverSetAddress != rpc.ZeroAddress {
+		data, err = encoding.ProverSetABI.Pack("proposeBlock", encodedParams, txListBytes)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		data, err = encoding.TaikoL1ABI.Pack("proposeBlock", encodedParams, txListBytes)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &txmgr.TxCandidate{
 		TxData:   data,
 		Blobs:    nil,
-		To:       &b.taikoL1Address,
+		To:       to,
 		GasLimit: b.gasLimit,
 		Value:    maxFee,
 	}, nil

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"math/big"
 	"sync"
 	"time"
 
@@ -29,11 +30,6 @@ import (
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/pkg/rpc"
 	selector "github.com/taikoxyz/taiko-mono/packages/taiko-client/proposer/prover_selector"
 	builder "github.com/taikoxyz/taiko-mono/packages/taiko-client/proposer/transaction_builder"
-)
-
-var (
-	proverAssignmentTimeout    = 30 * time.Minute
-	requestProverServerTimeout = 12 * time.Second
 )
 
 // Proposer keep proposing new transactions from L2 execution engine's tx pool at a fixed interval.
@@ -76,11 +72,11 @@ func (p *Proposer) InitFromCli(ctx context.Context, c *cli.Context) error {
 		return err
 	}
 
-	return p.InitFromConfig(ctx, cfg)
+	return p.InitFromConfig(ctx, cfg, nil)
 }
 
 // InitFromConfig initializes the proposer instance based on the given configurations.
-func (p *Proposer) InitFromConfig(ctx context.Context, cfg *Config) (err error) {
+func (p *Proposer) InitFromConfig(ctx context.Context, cfg *Config, txMgr *txmgr.SimpleTxManager) (err error) {
 	p.proposerAddress = crypto.PubkeyToAddress(cfg.L1ProposerPrivKey.PublicKey)
 	p.ctx = ctx
 	p.Config = cfg
@@ -107,13 +103,17 @@ func (p *Proposer) InitFromConfig(ctx context.Context, cfg *Config) (err error) 
 		return err
 	}
 
-	if p.txmgr, err = txmgr.NewSimpleTxManager(
-		"proposer",
-		log.Root(),
-		&metrics.TxMgrMetrics,
-		*cfg.TxmgrConfigs,
-	); err != nil {
-		return err
+	if txMgr != nil {
+		p.txmgr = txMgr
+	} else {
+		if p.txmgr, err = txmgr.NewSimpleTxManager(
+			"proposer",
+			log.Root(),
+			&metrics.TxMgrMetrics,
+			*cfg.TxmgrConfigs,
+		); err != nil {
+			return err
+		}
 	}
 
 	if p.proverSelector, err = selector.NewETHFeeEOASelector(
@@ -121,13 +121,11 @@ func (p *Proposer) InitFromConfig(ctx context.Context, cfg *Config) (err error) 
 		p.rpc,
 		p.proposerAddress,
 		cfg.TaikoL1Address,
-		cfg.AssignmentHookAddress,
+		cfg.ProverSetAddress,
 		p.tierFees,
 		cfg.TierFeePriceBump,
 		cfg.ProverEndpoints,
 		cfg.MaxTierFeePriceBumps,
-		proverAssignmentTimeout,
-		requestProverServerTimeout,
 	); err != nil {
 		return err
 	}
@@ -139,10 +137,11 @@ func (p *Proposer) InitFromConfig(ctx context.Context, cfg *Config) (err error) 
 			p.proverSelector,
 			p.Config.L1BlockBuilderTip,
 			cfg.TaikoL1Address,
+			cfg.ProverSetAddress,
 			cfg.L2SuggestedFeeRecipient,
-			cfg.AssignmentHookAddress,
 			cfg.ProposeBlockTxGasLimit,
 			cfg.ExtraData,
+			len(cfg.PreconfirmationRPC) > 0,
 		)
 	} else {
 		p.txBuilder = builder.NewCalldataTransactionBuilder(
@@ -152,9 +151,10 @@ func (p *Proposer) InitFromConfig(ctx context.Context, cfg *Config) (err error) 
 			p.Config.L1BlockBuilderTip,
 			cfg.L2SuggestedFeeRecipient,
 			cfg.TaikoL1Address,
-			cfg.AssignmentHookAddress,
+			cfg.ProverSetAddress,
 			cfg.ProposeBlockTxGasLimit,
 			cfg.ExtraData,
+			len(cfg.PreconfirmationRPC) > 0,
 		)
 	}
 
@@ -491,11 +491,28 @@ func (p *Proposer) ProposeTxList(
 		return err
 	}
 
+	var (
+		l1StateBlockNumber = uint32(0)
+		timestamp          = uint64(0)
+		parentMetaHash     = [32]byte{}
+	)
+
+	parent, err := p.getParentOfLatestProposedBlock(ctx, p.rpc)
+	if err != nil {
+		return err
+	}
+
+	if p.IncludeParentMetaHash {
+		parentMetaHash = parent.MetaHash
+	}
+
 	txCandidate, err := p.txBuilder.Build(
 		ctx,
 		p.tierFees,
-		p.IncludeParentMetaHash,
 		compressedTxListBytes,
+		l1StateBlockNumber,
+		timestamp,
+		parentMetaHash,
 	)
 	if err != nil {
 		log.Warn("Failed to build TaikoL1.proposeBlock transaction", "error", encoding.TryParsingCustomError(err))
@@ -572,4 +589,22 @@ func (p *Proposer) initTierFees() error {
 	}
 
 	return nil
+}
+
+// getParentOfLatestProposedBlock returns the parent block of the latest proposed block in protocol
+func (p *Proposer) getParentOfLatestProposedBlock(
+	ctx context.Context,
+	rpc *rpc.Client,
+) (*bindings.TaikoDataBlock, error) {
+	state, err := rpc.TaikoL1.State(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return nil, err
+	}
+
+	parent, err := rpc.GetL2BlockInfo(ctx, new(big.Int).SetUint64(state.SlotB.NumBlocks-1))
+	if err != nil {
+		return nil, err
+	}
+
+	return &parent, nil
 }

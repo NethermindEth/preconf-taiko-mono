@@ -24,7 +24,6 @@ import (
 // Config contains all configurations to initialize a Taiko proposer.
 type Config struct {
 	*rpc.ClientConfig
-	AssignmentHookAddress      common.Address
 	L1ProposerPrivKey          *ecdsa.PrivateKey
 	L2SuggestedFeeRecipient    common.Address
 	ExtraData                  string
@@ -45,6 +44,7 @@ type Config struct {
 	BlobAllowed                bool
 	TxmgrConfigs               *txmgr.CLIConfig
 	L1BlockBuilderTip          *big.Int
+	PreconfirmationRPC         string
 }
 
 // NewConfigFromCliContext initializes a Config instance from
@@ -94,6 +94,12 @@ func NewConfigFromCliContext(c *cli.Context) (*Config, error) {
 		return nil, err
 	}
 
+	l1RPCUrl := c.String(flags.L1WSEndpoint.Name)
+	preconfirmationRPC := c.String(flags.PreconfirmationRPC.Name)
+	if len(preconfirmationRPC) > 0 {
+		l1RPCUrl = preconfirmationRPC
+	}
+
 	return &Config{
 		ClientConfig: &rpc.ClientConfig{
 			L1Endpoint:        c.String(flags.L1WSEndpoint.Name),
@@ -104,8 +110,8 @@ func NewConfigFromCliContext(c *cli.Context) (*Config, error) {
 			JwtSecret:         string(jwtSecret),
 			TaikoTokenAddress: common.HexToAddress(c.String(flags.TaikoTokenAddress.Name)),
 			Timeout:           c.Duration(flags.RPCTimeout.Name),
+			ProverSetAddress:  common.HexToAddress(c.String(flags.ProverSetAddress.Name)),
 		},
-		AssignmentHookAddress:      common.HexToAddress(c.String(flags.AssignmentHookAddress.Name)),
 		L1ProposerPrivKey:          l1ProposerPrivKey,
 		L2SuggestedFeeRecipient:    common.HexToAddress(l2SuggestedFeeRecipient),
 		ExtraData:                  c.String(flags.ExtraData.Name),
@@ -126,7 +132,7 @@ func NewConfigFromCliContext(c *cli.Context) (*Config, error) {
 		BlobAllowed:                c.Bool(flags.BlobAllowed.Name),
 		L1BlockBuilderTip:          new(big.Int).SetUint64(c.Uint64(flags.L1BlockBuilderTip.Name)),
 		TxmgrConfigs: pkgFlags.InitTxmgrConfigsFromCli(
-			c.String(flags.L1WSEndpoint.Name),
+			l1RPCUrl,
 			l1ProposerPrivKey,
 			c,
 		),

@@ -62,10 +62,6 @@ cat ../protocol/out/GuardianProver.sol/GuardianProver.json |
 	jq .abi |
 	${ABIGEN_BIN} --abi - --type GuardianProver --pkg bindings --out $DIR/../bindings/gen_guardian_prover.go
 
-cat ../protocol/out/AssignmentHook.sol/AssignmentHook.json |
-	jq .abi |
-	${ABIGEN_BIN} --abi - --type AssignmentHook --pkg bindings --out $DIR/../bindings/gen_assignment_hook.go
-
 cat ../protocol/out/ProverSet.sol/ProverSet.json |
 	jq .abi |
 	${ABIGEN_BIN} --abi - --type ProverSet --pkg bindings --out $DIR/../bindings/gen_prover_set.go
@@ -77,6 +73,10 @@ cat ../protocol/out/DevnetTierProvider.sol/DevnetTierProvider.json |
 cat ../protocol/out/SgxVerifier.sol/SgxVerifier.json |
 	jq .abi |
 	${ABIGEN_BIN} --abi - --type SgxVerifier --pkg bindings --out $DIR/../bindings/gen_sgx_verifier.go
+
+cat ../protocol/out/SequencerRegistry.sol/SequencerRegistry.json |
+	jq .abi |
+	${ABIGEN_BIN} --abi - --type SequencerRegistry --pkg bindings --out $DIR/../bindings/gen_sequencer_registry.go
 
 git -C ../../ log --format="%H" -n 1 >./bindings/.githead
 
