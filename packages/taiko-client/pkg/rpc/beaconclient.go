@@ -87,6 +87,8 @@ func NewBeaconClient(endpoint string, timeout time.Duration) (*BeaconClient, err
 
 // GetBlobs returns the sidecars for a given slot.
 func (c *BeaconClient) GetBlobs(ctx context.Context, time uint64) ([]*blob.Sidecar, error) {
+	log.Info("Beacon client base URL", "url", c.BaseURL())
+
 	ctxWithTimeout, cancel := ctxWithTimeoutOrDefault(ctx, c.timeout)
 	defer cancel()
 
@@ -94,9 +96,7 @@ func (c *BeaconClient) GetBlobs(ctx context.Context, time uint64) ([]*blob.Sidec
 	if err != nil {
 		return nil, err
 	}
-
-	log.Info("Beacon client base URL", "url", c.BaseURL())
-
+	
 	resBytes, err := c.Get(ctxWithTimeout, c.BaseURL().Path+fmt.Sprintf(sidecarsRequestURL, slot))
 	if err != nil {
 		return nil, err
