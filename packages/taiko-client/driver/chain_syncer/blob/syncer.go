@@ -600,11 +600,11 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 	if err != nil {
 		return fmt.Errorf("failed to create execution payloads: %w", err)
 	}
-
+	finalized := s.state.GetL1Current().Hash()
 	fc := &engine.ForkchoiceStateV1{
 		HeadBlockHash:      payload.BlockHash,
-		SafeBlockHash:      payload.BlockHash,
-		FinalizedBlockHash: payload.BlockHash,
+		SafeBlockHash:      finalized,
+		FinalizedBlockHash: finalized,
 	}
 
 	// Update the fork choice
