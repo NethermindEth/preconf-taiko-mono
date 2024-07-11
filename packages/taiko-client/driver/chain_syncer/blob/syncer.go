@@ -453,6 +453,11 @@ func (s *Syncer) MoveTheHead(
 	txList []*types.Transaction,
 	gasUsed uint64,
 ) error {
+	lastInsertedL1BlockHeader, err := s.rpc.L1.HeaderByNumber(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to get latest block ID from L1: %w", err)
+	}
+
 	// taking last block from L2 instead of parent based on L1 block id
 	parent, err := s.rpc.L2.HeaderByNumber(ctx, nil)
 	if err != nil {
@@ -473,10 +478,10 @@ func (s *Syncer) MoveTheHead(
 		s.state.GetHeadBlockID(),
 		txList,
 		&rawdb.L1Origin{
-			BlockID:       lastInsertedBlockHeader.Number, // event.BlockId
-			L2BlockHash:   common.Hash{},                  // Will be set by taiko-geth.
-			L1BlockHeight: lastInsertedBlockHeader.Number, // new(big.Int).SetUint64(event.Raw.BlockNumber),
-			L1BlockHash:   lastInsertedBlockHeader.Hash(), // event.Raw.BlockHash,
+			BlockID:       lastInsertedL1BlockHeader.Number, // event.BlockId
+			L2BlockHash:   common.Hash{},                    // Will be set by taiko-geth.
+			L1BlockHeight: lastInsertedL1BlockHeader.Number, // new(big.Int).SetUint64(event.Raw.BlockNumber),
+			L1BlockHash:   lastInsertedL1BlockHeader.Hash(), // event.Raw.BlockHash,
 		},
 		gasUsed,
 	)
@@ -485,9 +490,9 @@ func (s *Syncer) MoveTheHead(
 	}
 
 	//(float64(event.Raw.BlockNumber))
-	metrics.DriverL1CurrentHeightGauge.Set(float64(lastInsertedBlockHeader.Number.Uint64()))
+	metrics.DriverL1CurrentHeightGauge.Set(float64(lastInsertedL1BlockHeader.Number.Uint64()))
 	//event.BlockId
-	s.lastInsertedBlockID = lastInsertedBlockHeader.Number
+	s.lastInsertedBlockID = lastInsertedL1BlockHeader.Number
 
 	if s.progressTracker.Triggered() {
 		s.progressTracker.ClearMeta()
