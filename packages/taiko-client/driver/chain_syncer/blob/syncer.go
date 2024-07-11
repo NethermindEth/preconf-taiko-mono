@@ -167,6 +167,8 @@ func (s *Syncer) onBlockProposed(
 	event *bindings.TaikoL1ClientBlockProposed,
 	endIter eventIterator.EndBlockProposedEventIterFunc,
 ) error {
+	log.Info("onBlockProposed", "blockID", event.BlockId)
+
 	// We simply ignore the genesis block's `BlockProposed` event.
 	if event.BlockId.Cmp(common.Big0) == 0 {
 		return nil
