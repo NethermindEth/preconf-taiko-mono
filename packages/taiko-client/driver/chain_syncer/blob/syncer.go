@@ -469,13 +469,8 @@ func (s *Syncer) MoveTheHead(
 	var (
 		parent *types.Header
 	)
-	if s.progressTracker.Triggered() {
-		parent, err = s.rpc.L2.HeaderByHash(ctx, s.progressTracker.LastSyncedBlockHash())
-	} else {
-		// taking last block from L2 instead of parent based on L1 block id
-		// parent, err = s.rpc.L2ParentByBlockID(ctx, event.BlockId)
-		parent, err = s.rpc.L2.HeaderByNumber(ctx, nil)
-	}
+	// taking last block from L2 instead of parent based on L1 block id
+	parent, err = s.rpc.L2.HeaderByNumber(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to fetch L2 parent block: %w", err)
 	}
@@ -602,11 +597,11 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 	if err != nil {
 		return fmt.Errorf("failed to create execution payloads: %w", err)
 	}
-
+	finalized := s.state.GetL2Head().Hash()
 	fc := &engine.ForkchoiceStateV1{
 		HeadBlockHash:      payload.BlockHash,
-		SafeBlockHash:      payload.BlockHash,
-		FinalizedBlockHash: payload.BlockHash,
+		SafeBlockHash:      finalized,
+		FinalizedBlockHash: finalized,
 	}
 
 	// Update the fork choice
