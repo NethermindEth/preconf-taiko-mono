@@ -464,6 +464,9 @@ func (s *Syncer) MoveTheHead(
 		return fmt.Errorf("failed to fetch L2 parent block: %w", err)
 	}
 
+	//TODO: verify if this is correct (no other blocks will come in between)
+	newL2BlockId := new(big.Int).Add(parent.Number, common.Big1)
+
 	log.Debug(
 		"Parent block",
 		"height", parent.Number,
@@ -478,7 +481,7 @@ func (s *Syncer) MoveTheHead(
 		s.state.GetHeadBlockID(),
 		txList,
 		&rawdb.L1Origin{
-			BlockID:       lastInsertedL1BlockHeader.Number, // event.BlockId
+			BlockID:       newL2BlockId,                     // event.BlockId
 			L2BlockHash:   common.Hash{},                    // Will be set by taiko-geth.
 			L1BlockHeight: lastInsertedL1BlockHeader.Number, // new(big.Int).SetUint64(event.Raw.BlockNumber),
 			L1BlockHash:   lastInsertedL1BlockHeader.Hash(), // event.Raw.BlockHash,
@@ -492,7 +495,7 @@ func (s *Syncer) MoveTheHead(
 	//(float64(event.Raw.BlockNumber))
 	metrics.DriverL1CurrentHeightGauge.Set(float64(lastInsertedL1BlockHeader.Number.Uint64()))
 	//event.BlockId
-	s.lastInsertedBlockID = lastInsertedL1BlockHeader.Number
+	s.lastInsertedBlockID = newL2BlockId
 
 	if s.progressTracker.Triggered() {
 		s.progressTracker.ClearMeta()
