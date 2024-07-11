@@ -453,24 +453,8 @@ func (s *Syncer) MoveTheHead(
 	txList []*types.Transaction,
 	gasUsed uint64,
 ) error {
-	lastInsertedBlockHeader, err := s.rpc.L1.HeaderByNumber(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to get latest block ID from L1: %w", err)
-	}
-
-	// Ignore those already inserted blocks.
-	// if s.lastInsertedBlockID != nil && event.BlockId.Cmp(s.lastInsertedBlockID) <= 0 {
-	if s.lastInsertedBlockID != nil && lastInsertedBlockHeader.Number.Cmp(s.lastInsertedBlockID) <= 0 {
-		return nil
-	}
-
-	// Fetch the L2 parent block, if the node is just finished a P2P sync, we simply use the tracker's
-	// last synced verified block as the parent, otherwise, we fetch the parent block from L2 EE.
-	var (
-		parent *types.Header
-	)
 	// taking last block from L2 instead of parent based on L1 block id
-	parent, err = s.rpc.L2.HeaderByNumber(ctx, nil)
+	parent, err := s.rpc.L2.HeaderByNumber(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to fetch L2 parent block: %w", err)
 	}
