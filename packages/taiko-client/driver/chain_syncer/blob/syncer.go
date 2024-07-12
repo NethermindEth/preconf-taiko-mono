@@ -553,11 +553,14 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 	// }
 
 	// Assemble a TaikoL2.anchor transaction
-	anchorTx, err := s.anchorConstructor.AssembleNullAnchorTx(
+	l1CurrentBlock := s.state.GetL1Current()
+	anchorTx, err := s.anchorConstructor.AssembleAnchorTx(
 		ctx,
+		new(big.Int).SetUint64(l1CurrentBlock.Number.Uint64()),
+		l1CurrentBlock.Hash(),
 		new(big.Int).Add(parent.Number, common.Big1),
 		baseFeeInfo.Basefee,
-		gasUsed,
+		parent.GasUsed,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create TaikoL2.anchor transaction: %w", err)
