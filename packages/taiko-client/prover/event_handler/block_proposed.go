@@ -89,6 +89,7 @@ func (h *BlockProposedEventHandler) Handle(
 	e *bindings.TaikoL1ClientBlockProposed,
 	end eventIterator.EndBlockProposedEventIterFunc,
 ) error {
+	log.Info("Handle for BlockProposedEventHandler")
 	// If there are newly generated proofs, we need to submit them as soon as possible,
 	// to avoid proof submission timeout.
 	if len(h.proofGenerationCh) > 0 {

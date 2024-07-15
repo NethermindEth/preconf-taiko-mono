@@ -17,6 +17,7 @@ require (
 	github.com/go-resty/resty/v2 v2.7.0
 	github.com/gomarkdown/markdown v0.0.0-20231222211730-1d6d20845b47
 	github.com/google/uuid v1.6.0
+	github.com/gorilla/rpc v1.2.1
 	github.com/joho/godotenv v1.5.1
 	github.com/labstack/echo-contrib v0.17.1
 	github.com/labstack/echo/v4 v4.12.0
