@@ -96,7 +96,7 @@ func (c *BeaconClient) GetBlobs(ctx context.Context, time uint64) ([]*blob.Sidec
 	if err != nil {
 		return nil, err
 	}
-	
+
 	resBytes, err := c.Get(ctxWithTimeout, c.BaseURL().Path+fmt.Sprintf(sidecarsRequestURL, slot))
 	if err != nil {
 		return nil, err

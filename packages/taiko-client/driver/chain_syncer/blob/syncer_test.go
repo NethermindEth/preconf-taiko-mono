@@ -142,7 +142,6 @@ func (s *BlobSyncerTestSuite) TestInsertNewHeadUsingDecodedTxList() {
 			L1BlockHeight: common.Big1,
 			L1BlockHash:   l1Head.Hash(),
 		},
-		100000000,
 	)
 	s.Nil(err)
 }
@@ -172,7 +171,6 @@ func (s *BlobSyncerTestSuite) TestMoveTheHead() {
 	err = s.s.MoveTheHead(
 		context.Background(),
 		txList,
-		100000000,
 	)
 	s.Nil(err)
 

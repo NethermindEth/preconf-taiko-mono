@@ -284,7 +284,7 @@ func (p *RPC) AdvanceL2ChainHeadWithNewBlocks(_ *http.Request, args *Args, reply
 	syncer := p.driver.l2ChainSyncer.BlobSyncer()
 
 	for _, txList := range args.TxLists {
-		err := syncer.MoveTheHead(p.driver.ctx, txList, args.GasUsed)
+		err := syncer.MoveTheHead(p.driver.ctx, txList)
 		if err != nil {
 			log.Error("Failed to move the head with new block", "error", err)
 			return err

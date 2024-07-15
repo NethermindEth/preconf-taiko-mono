@@ -29,8 +29,6 @@ var (
 	_ = abi.ConvertType
 )
 
-
-
 // V3StructCertificationData is an auto generated low-level Go binding around an user-defined struct.
 type V3StructCertificationData struct {
 	CertType             uint16

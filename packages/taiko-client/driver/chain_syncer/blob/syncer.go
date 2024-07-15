@@ -451,7 +451,6 @@ func (s *Syncer) insertNewHead(
 func (s *Syncer) MoveTheHead(
 	ctx context.Context,
 	txList []*types.Transaction,
-	gasUsed uint64,
 ) error {
 	lastInsertedL1BlockHeader, err := s.rpc.L1.HeaderByNumber(ctx, nil)
 	if err != nil {
@@ -465,7 +464,7 @@ func (s *Syncer) MoveTheHead(
 	}
 
 	//TODO: verify if this is correct (no other blocks will come in between)
-	newL2BlockId := new(big.Int).Add(parent.Number, common.Big1)
+	newL2BlockID := new(big.Int).Add(parent.Number, common.Big1)
 
 	log.Debug(
 		"Parent block",
@@ -481,12 +480,11 @@ func (s *Syncer) MoveTheHead(
 		s.state.GetHeadBlockID(),
 		txList,
 		&rawdb.L1Origin{
-			BlockID:       newL2BlockId,                     // event.BlockId
+			BlockID:       newL2BlockID,                     // event.BlockId
 			L2BlockHash:   common.Hash{},                    // Will be set by taiko-geth.
 			L1BlockHeight: lastInsertedL1BlockHeader.Number, // new(big.Int).SetUint64(event.Raw.BlockNumber),
 			L1BlockHash:   lastInsertedL1BlockHeader.Hash(), // event.Raw.BlockHash,
 		},
-		gasUsed,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert new head to L2 execution engine: %w", err)
@@ -495,7 +493,7 @@ func (s *Syncer) MoveTheHead(
 	//(float64(event.Raw.BlockNumber))
 	metrics.DriverL1CurrentHeightGauge.Set(float64(lastInsertedL1BlockHeader.Number.Uint64()))
 	//event.BlockId
-	s.lastInsertedBlockID = newL2BlockId
+	s.lastInsertedBlockID = newL2BlockID
 
 	if s.progressTracker.Triggered() {
 		s.progressTracker.ClearMeta()
@@ -512,7 +510,6 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 	headBlockID *big.Int,
 	txList []*types.Transaction,
 	l1Origin *rawdb.L1Origin,
-	gasUsed uint64,
 ) error {
 	log.Debug(
 		"Try to insert a new L2 head block",
