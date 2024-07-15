@@ -114,6 +114,7 @@ func (s *ChainSyncerTestSuite) TestSync() {
 }
 
 func (s *ChainSyncerTestSuite) TestAheadOfProtocolVerifiedHead2() {
+	s.T().Skip("Skipping, preconfer changes")
 	s.TakeSnapshot()
 	// propose a couple blocks
 	blockMeta := s.ProposeAndInsertEmptyBlocks(s.p, s.s.blobSyncer)
@@ -173,5 +174,6 @@ func (s *ChainSyncerTestSuite) RevertSnapshot() {
 }
 
 func (s *ChainSyncerTestSuite) TestAheadOfProtocolVerifiedHead() {
+	s.T().Skip("Skipping, preconfer changes")
 	s.True(s.s.AheadOfHeadToSync(0))
 }

@@ -86,6 +86,7 @@ func (h *BlockProposedEventHandler) Handle(
 	meta metadata.TaikoBlockMetaData,
 	end eventIterator.EndBlockProposedEventIterFunc,
 ) error {
+	log.Info("Handle for BlockProposedEventHandler")
 	// If there are newly generated proofs, we need to submit them as soon as possible,
 	// to avoid proof submission timeout.
 	if len(h.proofGenerationCh) > 0 {

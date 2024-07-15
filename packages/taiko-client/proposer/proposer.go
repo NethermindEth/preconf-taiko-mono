@@ -3,11 +3,15 @@ package proposer
 import (
 	"context"
 	"errors"
+	"encoding/json"
 	"fmt"
 	"math/big"
-	"math/rand"
+	"net/http"
 	"sync"
 	"time"
+
+	gorilla_rcp "github.com/gorilla/rpc/v2"
+	"github.com/gorilla/rpc/v2/json2"
 
 	"github.com/ethereum-optimism/optimism/op-service/txmgr"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -39,7 +43,7 @@ type Proposer struct {
 	// Private keys and account addresses
 	proposerAddress common.Address
 
-	proposingTimer *time.Timer
+	// proposingTimer *time.Timer
 
 	// Transaction builder
 	txBuilder builder.ProposeBlockTransactionBuilder
@@ -145,8 +149,10 @@ func (p *Proposer) InitFromConfig(
 
 // Start starts the proposer's main loop.
 func (p *Proposer) Start() error {
-	p.wg.Add(1)
-	go p.eventLoop()
+	startRPCServer(p)
+
+	// p.wg.Add(1)
+	// go p.eventLoop()
 	return nil
 }
 
@@ -176,6 +182,123 @@ func (p *Proposer) eventLoop() {
 		}
 	}
 }
+
+// Args represents the arguments to be passed to the RPC method.
+type Args struct {
+}
+
+type RPCReplyL2TxLists struct {
+	TxLists        []types.Transactions
+	TxListBytes    [][]byte
+	ParentMetaHash common.Hash
+}
+
+type CustomResponse struct {
+	Result *RPCReplyL2TxLists `json:"result,omitempty"`
+	Error  interface{}        `json:"error,omitempty"`
+}
+
+// RPC is the receiver type for the RPC methods.
+type RPC struct {
+	proposer *Proposer
+}
+
+func (p *RPC) GetL2TxLists(_ *http.Request, _ *Args, reply *RPCReplyL2TxLists) error {
+	txLists, compressedTxLists, err := p.proposer.ProposeOpForTakingL2Blocks(context.Background())
+	if err != nil {
+		return err
+	}
+	log.Info("Received L2 txLists ", "txListsLength", len(txLists))
+	if len(txLists) == 1 {
+		log.Info("Single L2 txList", "txList", txLists[0])
+	}
+
+	parentMetaHash, err := builder.GetParentMetaHash(p.proposer.ctx, p.proposer.rpc)
+	if err != nil {
+		return err
+	}
+
+	*reply = RPCReplyL2TxLists{TxLists: txLists, TxListBytes: compressedTxLists, ParentMetaHash: parentMetaHash}
+	return nil
+}
+
+const rpcPort = 1234
+
+func startRPCServer(proposer *Proposer) {
+	s := gorilla_rcp.NewServer()
+	s.RegisterCodec(NewCustomCodec(), "application/json")
+	proposerRPC := &RPC{proposer: proposer}
+	err := s.RegisterService(proposerRPC, "")
+	if err != nil {
+		log.Error("Failed to register proposer RPC service", "error", err)
+	}
+
+	http.Handle("/rpc", s)
+	log.Info("Starting JSON-RPC server", "port", rpcPort)
+
+	// Create a custom HTTP server with timeouts
+	server := &http.Server{
+		Addr:         fmt.Sprintf(":%d", rpcPort),
+		Handler:      s,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  15 * time.Second,
+	}
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil {
+			log.Error("Failed to start HTTP server", "error", err)
+		}
+	}()
+}
+
+type CustomCodec struct {
+	*json2.Codec
+}
+
+func NewCustomCodec() *CustomCodec {
+	return &CustomCodec{json2.NewCodec()}
+}
+
+func (c *CustomCodec) WriteResponse(w http.ResponseWriter, reply interface{}, methodErr error) error {
+	response := CustomResponse{}
+
+	if methodErr != nil {
+		response.Error = methodErr.Error()
+	} else if reply != nil {
+		response.Result = reply.(*RPCReplyL2TxLists)
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	encoder := json.NewEncoder(w)
+	return encoder.Encode(response)
+}
+
+// eventLoop starts the main loop of Taiko proposer.
+// func (p *Proposer) eventLoop() {
+// 	defer func() {
+// 		p.proposingTimer.Stop()
+// 		p.wg.Done()
+// 	}()
+
+// 	for {
+// 		p.updateProposingTicker()
+
+// 		select {
+// 		case <-p.ctx.Done():
+// 			return
+// 		// proposing interval timer has been reached
+// 		case <-p.proposingTimer.C:
+// 			metrics.ProposerProposeEpochCounter.Add(1)
+
+// 			// Attempt a proposing operation
+// 			if err := p.ProposeOp(p.ctx); err != nil {
+// 				log.Error("Proposing operation error", "error", err)
+// 				continue
+// 			}
+// 		}
+// 	}
+// }
 
 // Close closes the proposer instance.
 func (p *Proposer) Close(_ context.Context) {
@@ -346,6 +469,58 @@ func (p *Proposer) ProposeTxLists(ctx context.Context, txLists []types.Transacti
 	return nil
 }
 
+func (p *Proposer) ProposeOpForTakingL2Blocks(ctx context.Context) ([]types.Transactions, [][]byte, error) {
+	log.Info("ProposeOpForTakingL2Blocks")
+	// Check if it's time to propose unfiltered pool content.
+	filterPoolContent := time.Now().Before(p.lastProposedAt.Add(p.MinProposingInternal))
+
+	// Wait until L2 execution engine is synced at first.
+	if err := p.rpc.WaitTillL2ExecutionEngineSynced(ctx); err != nil {
+		return nil, nil, fmt.Errorf("failed to wait until L2 execution engine synced: %w", err)
+	}
+
+	log.Info(
+		"Start fetching L2 execution engine's transaction pool content",
+		"filterPoolContent", filterPoolContent,
+		"lastProposedAt", p.lastProposedAt,
+	)
+
+	txLists, err := p.fetchPoolContent(filterPoolContent)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// If the pool content is empty, return.
+	if len(txLists) == 0 {
+		return nil, nil, nil
+	}
+
+	if len(txLists) == 1 && len(txLists[0]) == 0 {
+		return []types.Transactions{}, [][]byte{}, nil
+	}
+
+	compressedTxLists := [][]byte{}
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get parent meta hash: %w", err)
+	}
+
+	//TODO adjust the Max value
+	for _, txs := range txLists[:utils.Min(p.MaxProposedTxListsPerEpoch, uint64(len(txLists)))] {
+		txListBytes, err := rlp.EncodeToBytes(txs)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to encode transactions: %w", err)
+		}
+		compressedTxListBytes, err := utils.Compress(txListBytes)
+		if err != nil {
+			return nil, nil, err
+		}
+		compressedTxLists = append(compressedTxLists, compressedTxListBytes)
+		p.lastProposedAt = time.Now() //TODO check if it's correct
+	}
+
+	return txLists, compressedTxLists, nil
+}
+
 // ProposeTxListLegacy proposes the given transactions list to TaikoL1 smart contract.
 func (p *Proposer) ProposeTxListLegacy(
 	ctx context.Context,
@@ -472,22 +647,22 @@ func (p *Proposer) ProposeTxListOntake(
 }
 
 // updateProposingTicker updates the internal proposing timer.
-func (p *Proposer) updateProposingTicker() {
-	if p.proposingTimer != nil {
-		p.proposingTimer.Stop()
-	}
+// func (p *Proposer) updateProposingTicker() {
+// 	if p.proposingTimer != nil {
+// 		p.proposingTimer.Stop()
+// 	}
 
-	var duration time.Duration
-	if p.ProposeInterval != 0 {
-		duration = p.ProposeInterval
-	} else {
-		// Random number between 12 - 120
-		randomSeconds := rand.Intn(120-11) + 12 // nolint: gosec
-		duration = time.Duration(randomSeconds) * time.Second
-	}
+// 	var duration time.Duration
+// 	if p.ProposeInterval != 0 {
+// 		duration = p.ProposeInterval
+// 	} else {
+// 		// Random number between 12 - 120
+// 		randomSeconds := rand.Intn(120-11) + 12 // nolint: gosec
+// 		duration = time.Duration(randomSeconds) * time.Second
+// 	}
 
-	p.proposingTimer = time.NewTimer(duration)
-}
+// 	p.proposingTimer = time.NewTimer(duration)
+// }
 
 // sendTx is the internal function to send a transaction with a selected tx manager.
 func (p *Proposer) sendTx(ctx context.Context, txCandidate *txmgr.TxCandidate) error {
