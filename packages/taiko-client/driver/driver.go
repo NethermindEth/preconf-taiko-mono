@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/http"
 	"sync"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/urfave/cli/v2"
 
+	"github.com/taikoxyz/taiko-mono/packages/taiko-client/bindings"
 	chainSyncer "github.com/taikoxyz/taiko-mono/packages/taiko-client/driver/chain_syncer"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/driver/state"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/pkg/rpc"
@@ -44,6 +46,8 @@ type Driver struct {
 
 	ctx context.Context
 	wg  sync.WaitGroup
+
+	blockProposedEventChan chan *bindings.TaikoL1ClientBlockProposed
 }
 
 // InitFromCli initializes the given driver instance based on the command line flags.
@@ -81,6 +85,9 @@ func (d *Driver) InitFromConfig(ctx context.Context, cfg *Config) (err error) {
 		log.Warn("P2P syncing verified blocks enabled, but no connected peer found in L2 execution engine")
 	}
 
+	eventChan := make(chan *bindings.TaikoL1ClientBlockProposed)
+	d.blockProposedEventChan = eventChan
+
 	if d.l2ChainSyncer, err = chainSyncer.New(
 		d.ctx,
 		d.rpc,
@@ -90,6 +97,7 @@ func (d *Driver) InitFromConfig(ctx context.Context, cfg *Config) (err error) {
 		cfg.MaxExponent,
 		cfg.BlobServerEndpoint,
 		cfg.SocialScanEndpoint,
+		eventChan,
 	); err != nil {
 		return err
 	}
@@ -292,6 +300,24 @@ func (p *RPC) AdvanceL2ChainHeadWithNewBlocks(_ *http.Request, args *Args, reply
 	}
 
 	*reply = "Request received and processed successfully"
+	return nil
+}
+
+type RPCReplyBlockProposed struct {
+	BlockId    big.Int
+	TxListHash [32]byte
+	Proposer   common.Address
+}
+
+func (p *RPC) WaitForBlockProposed(_ *http.Request, _ *Args, reply *RPCReplyBlockProposed) error {
+	log.Info("Waiting for BlockProposed event")
+	blockProposedEvent := <-p.driver.blockProposedEventChan
+	*reply = RPCReplyBlockProposed{
+		BlockId:    *blockProposedEvent.BlockId,
+		TxListHash: blockProposedEvent.Meta.BlobHash,
+		Proposer:   blockProposedEvent.Meta.Sender,
+	}
+	log.Info("BlockProposed event received", "reply", *reply)
 	return nil
 }
 
