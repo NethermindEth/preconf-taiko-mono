@@ -321,7 +321,7 @@ func (s *DriverTestSuite) TestWaitForBlockProposed() {
 			Timestamp:  uint64(time.Now().Unix()),
 		},
 	}
-	s.d.ChainSyncer().BlobSyncer().BlockProposedTestWrapper(ctx, blockProposedEvent)
+	_ = s.d.ChainSyncer().BlobSyncer().BlockProposedTestWrapper(ctx, blockProposedEvent)
 
 	// Wait for a short period to ensure the event is processed
 	time.Sleep(100 * time.Millisecond)

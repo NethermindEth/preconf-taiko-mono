@@ -304,7 +304,7 @@ func (p *RPC) AdvanceL2ChainHeadWithNewBlocks(_ *http.Request, args *Args, reply
 }
 
 type RPCReplyBlockProposed struct {
-	BlockId    big.Int
+	BlockID    big.Int
 	TxListHash [32]byte
 	Proposer   common.Address
 }
@@ -313,7 +313,7 @@ func (p *RPC) WaitForBlockProposed(_ *http.Request, _ *Args, reply *RPCReplyBloc
 	log.Info("Waiting for BlockProposed event")
 	blockProposedEvent := <-p.driver.blockProposedEventChan
 	*reply = RPCReplyBlockProposed{
-		BlockId:    *blockProposedEvent.BlockId,
+		BlockID:    *blockProposedEvent.BlockId,
 		TxListHash: blockProposedEvent.Meta.BlobHash,
 		Proposer:   blockProposedEvent.Meta.Sender,
 	}
