@@ -164,6 +164,10 @@ func (s *Syncer) processL1Blocks(ctx context.Context) error {
 	return nil
 }
 
+func (s *Syncer) BlockProposedTestWrapper(ctx context.Context, event *bindings.TaikoL1ClientBlockProposed) error {
+	return s.onBlockProposed(ctx, event, nil)
+}
+
 // OnBlockProposed is a `BlockProposed` event callback which responsible for
 // inserting the proposed block one by one to the L2 execution engine.
 func (s *Syncer) onBlockProposed(
@@ -172,6 +176,8 @@ func (s *Syncer) onBlockProposed(
 	endIter eventIterator.EndBlockProposedEventIterFunc,
 ) error {
 	log.Info("onBlockProposed", "blockID", event.BlockId)
+
+	s.blockProposedEventChan <- event
 
 	// We simply ignore the genesis block's `BlockProposed` event.
 	if event.BlockId.Cmp(common.Big0) == 0 {
