@@ -44,10 +44,11 @@ type Syncer struct {
 	anchorConstructor  *anchorTxConstructor.AnchorTxConstructor // TaikoL2.anchor transactions constructor
 	txListDecompressor *txListDecompressor.TxListDecompressor   // Transactions list decompressor
 	// Used by BlockInserter
-	lastInsertedBlockID *big.Int
-	reorgDetectedFlag   bool
-	maxRetrieveExponent uint64
-	blobDatasource      *rpc.BlobDataSource
+	lastInsertedBlockID    *big.Int
+	reorgDetectedFlag      bool
+	maxRetrieveExponent    uint64
+	blobDatasource         *rpc.BlobDataSource
+	blockProposedEventChan chan *bindings.TaikoL1ClientBlockProposed
 }
 
 // NewSyncer creates a new syncer instance.
@@ -59,6 +60,7 @@ func NewSyncer(
 	maxRetrieveExponent uint64,
 	blobServerEndpoint *url.URL,
 	socialScanEndpoint *url.URL,
+	blockProposedEventChan chan *bindings.TaikoL1ClientBlockProposed,
 ) (*Syncer, error) {
 	configs, err := client.TaikoL1.GetConfig(&bind.CallOpts{Context: ctx})
 	if err != nil {
@@ -88,6 +90,7 @@ func NewSyncer(
 			blobServerEndpoint,
 			socialScanEndpoint,
 		),
+		blockProposedEventChan: blockProposedEventChan,
 	}, nil
 }
 
