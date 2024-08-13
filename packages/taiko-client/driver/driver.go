@@ -84,7 +84,7 @@ func (d *Driver) InitFromConfig(ctx context.Context, cfg *Config) (err error) {
 		log.Warn("P2P syncing verified blocks enabled, but no connected peer found in L2 execution engine")
 	}
 
-	eventChan := make(chan *bindings.TaikoL1ClientBlockProposed)
+	eventChan := make(chan *bindings.TaikoL1ClientBlockProposed, 200)
 	d.blockProposedEventChan = eventChan
 
 	if d.l2ChainSyncer, err = chainSyncer.New(
@@ -331,13 +331,13 @@ func (d *Driver) startRPCServer() {
 	}
 
 	http.Handle("/rpc", s)
-	log.Info("Starting JSON-RPC server", "port", rpcPort, "writeTimeout", d.RpcWriteTimeout)
+	log.Info("Starting JSON-RPC server", "port", rpcPort, "writeTimeout", d.RPCWriteTimeout)
 	// Create a custom HTTP server with timeouts
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", rpcPort),
 		Handler:      s,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: d.RpcWriteTimeout,
+		WriteTimeout: d.RPCWriteTimeout,
 		IdleTimeout:  15 * time.Second,
 	}
 

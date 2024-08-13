@@ -29,8 +29,9 @@ import (
 
 type BlobSyncerTestSuite struct {
 	testutils.ClientTestSuite
-	s *Syncer
-	p testutils.Proposer
+	s         *Syncer
+	p         testutils.Proposer
+	eventChan chan *bindings.TaikoL1ClientBlockProposed
 }
 
 func (s *BlobSyncerTestSuite) SetupTest() {
@@ -38,6 +39,8 @@ func (s *BlobSyncerTestSuite) SetupTest() {
 
 	state2, err := state.New(context.Background(), s.RPCClient)
 	s.Nil(err)
+
+	s.eventChan = make(chan *bindings.TaikoL1ClientBlockProposed, 200)
 
 	syncer, err := NewSyncer(
 		context.Background(),
@@ -47,7 +50,7 @@ func (s *BlobSyncerTestSuite) SetupTest() {
 		0,
 		nil,
 		nil,
-		nil,
+		s.eventChan,
 	)
 	s.Nil(err)
 	s.s = syncer
