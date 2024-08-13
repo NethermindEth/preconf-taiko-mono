@@ -84,7 +84,7 @@ func (d *Driver) InitFromConfig(ctx context.Context, cfg *Config) (err error) {
 		log.Warn("P2P syncing verified blocks enabled, but no connected peer found in L2 execution engine")
 	}
 
-	eventChan := make(chan *bindings.TaikoL1ClientBlockProposed)
+	eventChan := make(chan *bindings.TaikoL1ClientBlockProposed, 200)
 	d.blockProposedEventChan = eventChan
 
 	if d.l2ChainSyncer, err = chainSyncer.New(
