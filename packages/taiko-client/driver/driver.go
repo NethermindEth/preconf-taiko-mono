@@ -331,13 +331,13 @@ func (d *Driver) startRPCServer() {
 	}
 
 	http.Handle("/rpc", s)
-	log.Info("Starting JSON-RPC server", "port", rpcPort, "writeTimeout", d.RpcWriteTimeout)
+	log.Info("Starting JSON-RPC server", "port", rpcPort, "writeTimeout", d.RPCWriteTimeout)
 	// Create a custom HTTP server with timeouts
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", rpcPort),
 		Handler:      s,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: d.RpcWriteTimeout,
+		WriteTimeout: d.RPCWriteTimeout,
 		IdleTimeout:  15 * time.Second,
 	}
 
