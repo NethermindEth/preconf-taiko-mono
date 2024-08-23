@@ -3,12 +3,17 @@ package server
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 
+	badger "github.com/dgraph-io/badger/v4"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/gommon/log"
 
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/preconfapi/builder"
+	"github.com/taikoxyz/taiko-mono/packages/taiko-client/preconfapi/model"
 )
 
 // @title Taiko Preconf Server API
@@ -53,6 +58,8 @@ type buildBlockResponse struct {
 //	@Success		200	{object} buildBlockResponse
 //	@Router			/block/build [post]
 func (s *PreconfAPIServer) BuildBlock(c echo.Context) error {
+	log.Info("buildBlock req")
+
 	req := &buildBlockRequest{}
 	if err := c.Bind(req); err != nil {
 		return c.JSON(http.StatusUnprocessableEntity, err)
@@ -86,6 +93,8 @@ func (s *PreconfAPIServer) BuildBlock(c echo.Context) error {
 
 	hexEncodedTx := hex.EncodeToString(rlpEncodedTx.Bytes())
 
+	log.Info("buildBlock res", "tx", hexEncodedTx)
+
 	return c.JSON(http.StatusOK, buildBlockResponse{RLPEncodedTx: hexEncodedTx})
 }
 
@@ -99,6 +108,8 @@ func (s *PreconfAPIServer) BuildBlock(c echo.Context) error {
 //	@Success		200	{object} buildBlockResponse
 //	@Router			/blocks/build [post]
 func (s *PreconfAPIServer) BuildBlocks(c echo.Context) error {
+	log.Info("buildBlocks req")
+
 	req := &buildBlocksRequest{}
 	if err := c.Bind(req); err != nil {
 		return c.JSON(http.StatusUnprocessableEntity, err)
@@ -126,7 +137,43 @@ func (s *PreconfAPIServer) BuildBlocks(c echo.Context) error {
 
 	hexEncodedTx := hex.EncodeToString(rlpEncodedTx.Bytes())
 
+	log.Info("buildBlocks res", "tx", hexEncodedTx)
+
 	return c.JSON(http.StatusOK, buildBlockResponse{RLPEncodedTx: hexEncodedTx})
+}
+
+func (s *PreconfAPIServer) GetTransactionByHash(c echo.Context) error {
+	hash := c.Param("hash")
+
+	// get from badger db
+	tx := &model.Transaction{}
+
+	if err := s.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(common.HexToHash(hash).Bytes())
+		if err != nil {
+			return err
+		}
+
+		if item == nil {
+			return nil
+		}
+
+		if err := item.Value(func(val []byte) error {
+			return json.Unmarshal(val, tx)
+		}); err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
+		return c.JSON(http.StatusNotFound, nil)
+	}
+
+	if tx == nil {
+		return c.JSON(http.StatusNotFound, nil)
+	}
+
+	return c.JSON(http.StatusOK, tx)
 }
 
 func paramsToOpts(params []buildBlockParams) builder.BuildBlocksUnsignedOpts {
