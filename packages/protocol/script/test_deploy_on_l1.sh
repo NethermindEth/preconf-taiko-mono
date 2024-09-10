@@ -4,7 +4,7 @@
 set -e
 
 export PRIVATE_KEY=0xbcdf20249abf0ed6d944c0288fad489e33f66b3960d9e6229c1cd214ed3bbe31
-export FORK_URL= 
+export FORK_URL=
 PROPOSER=0x0000000000000000000000000000000000000000 \
 TAIKO_TOKEN=0x0000000000000000000000000000000000000000 \
 PROPOSER_ONE=0x0000000000000000000000000000000000000000 \
@@ -24,21 +24,6 @@ NUM_MIN_MAJORITY_GUARDIANS=7 \
 NUM_MIN_MINORITY_GUARDIANS=2 \
 TIER_PROVIDER="devnet" \
 forge script script/DeployOnL1.s.sol:DeployOnL1 \
-    --fork-url $FORK_URL \
-    --broadcast \
-    --skip-simulation \
-    --ffi \
-    -vvvv \
-    --private-key $PRIVATE_KEY \
-    --block-gas-limit 100000000
-
-export PRIVATE_KEY=0xbcdf20249abf0ed6d944c0288fad489e33f66b3960d9e6229c1cd214ed3bbe31
-export FORK_URL= 
-SECURITY_COUNCIL=0x8943545177806ED17B9F23F0a21ee5948eCaa776 \
-TAIKO_TOKEN_PREMINT_RECIPIENT=0x8943545177806ED17B9F23F0a21ee5948eCaa776 \
-TAIKO_TOKEN_NAME="Taiko Token" \
-TAIKO_TOKEN_SYMBOL=TKO \
-forge script script/DeployTaikoToken.s.sol:DeployTaikoToken \
     --fork-url $FORK_URL \
     --broadcast \
     --skip-simulation \
