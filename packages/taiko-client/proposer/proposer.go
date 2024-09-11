@@ -176,7 +176,7 @@ type Args struct {
 
 type RPCReplyL2TxLists struct {
 	TxLists        []types.Transactions
-	TxListBytes    [][]byte
+	TxListRLPBytes [][]byte
 	ParentMetaHash common.Hash
 	ParentBlockID  uint64
 }
@@ -192,7 +192,7 @@ type RPC struct {
 }
 
 func (p *RPC) GetL2TxLists(_ *http.Request, _ *Args, reply *RPCReplyL2TxLists) error {
-	txLists, compressedTxLists, err := p.proposer.ProposeOpForTakingL2Blocks(context.Background())
+	txLists, rlpEncodedTxLists, err := p.proposer.ProposeOpForTakingL2Blocks(context.Background())
 	if err != nil {
 		return err
 	}
@@ -208,10 +208,11 @@ func (p *RPC) GetL2TxLists(_ *http.Request, _ *Args, reply *RPCReplyL2TxLists) e
 
 	*reply = RPCReplyL2TxLists{
 		TxLists:        txLists,
-		TxListBytes:    compressedTxLists,
+		TxListRLPBytes: rlpEncodedTxLists,
 		ParentMetaHash: parent.MetaHash,
 		ParentBlockID:  parent.BlockId,
 	}
+
 	return nil
 }
 
@@ -464,7 +465,7 @@ func (p *Proposer) ProposeOpForTakingL2Blocks(ctx context.Context) ([]types.Tran
 		return []types.Transactions{}, [][]byte{}, nil
 	}
 
-	compressedTxLists := [][]byte{}
+	RLPEncodedTxLists := [][]byte{}
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get parent meta hash: %w", err)
 	}
@@ -475,15 +476,15 @@ func (p *Proposer) ProposeOpForTakingL2Blocks(ctx context.Context) ([]types.Tran
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to encode transactions: %w", err)
 		}
-		compressedTxListBytes, err := utils.Compress(txListBytes)
-		if err != nil {
-			return nil, nil, err
-		}
-		compressedTxLists = append(compressedTxLists, compressedTxListBytes)
+		// compressedTxListBytes, err := utils.Compress(txListBytes)
+		// if err != nil {
+		// 	return nil, nil, err
+		// }
+		RLPEncodedTxLists = append(RLPEncodedTxLists, txListBytes)
 		p.lastProposedAt = time.Now() //TODO check if it's correct
 	}
 
-	return txLists, compressedTxLists, nil
+	return txLists, RLPEncodedTxLists, nil
 }
 
 // ProposeTxList proposes the given transactions list to TaikoL1 smart contract.
