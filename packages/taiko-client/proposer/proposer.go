@@ -465,7 +465,7 @@ func (p *Proposer) ProposeOpForTakingL2Blocks(ctx context.Context) ([]types.Tran
 		return []types.Transactions{}, [][]byte{}, nil
 	}
 
-	RLPEncodedTxLists := [][]byte{}
+	rlpEncodedTxLists := [][]byte{}
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get parent meta hash: %w", err)
 	}
@@ -480,11 +480,11 @@ func (p *Proposer) ProposeOpForTakingL2Blocks(ctx context.Context) ([]types.Tran
 		// if err != nil {
 		// 	return nil, nil, err
 		// }
-		RLPEncodedTxLists = append(RLPEncodedTxLists, txListBytes)
+		rlpEncodedTxLists = append(rlpEncodedTxLists, txListBytes)
 		p.lastProposedAt = time.Now() //TODO check if it's correct
 	}
 
-	return txLists, RLPEncodedTxLists, nil
+	return txLists, rlpEncodedTxLists, nil
 }
 
 // ProposeTxList proposes the given transactions list to TaikoL1 smart contract.
