@@ -22,6 +22,7 @@ RUN chmod +x script/*.sh
 # Set environment variables
 ENV PRIVATE_KEY=0xbcdf20249abf0ed6d944c0288fad489e33f66b3960d9e6229c1cd214ed3bbe31
 ENV FORK_URL="http://139.162.249.67:32002"
+ENV PATH="/root/.foundry/bin:$PATH"
 
 # Default command to run if no arguments are provided
 CMD ["sh", "-c", "script/test_deploy_on_l1.sh"]
