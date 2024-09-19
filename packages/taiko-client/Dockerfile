@@ -19,5 +19,7 @@ RUN apk add --no-cache ca-certificates libstdc++
 COPY --from=builder /build/packages/taiko-client/bin/taiko-client /usr/local/bin/
 
 EXPOSE 6060
+EXPOSE 1234
+EXPOSE 1235
 
 ENTRYPOINT ["taiko-client"]
