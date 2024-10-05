@@ -2,8 +2,8 @@ package proposer
 
 import (
 	"context"
-	"errors"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -157,31 +157,31 @@ func (p *Proposer) Start() error {
 }
 
 // eventLoop starts the main loop of Taiko proposer.
-func (p *Proposer) eventLoop() {
-	defer func() {
-		p.proposingTimer.Stop()
-		p.wg.Done()
-	}()
+// func (p *Proposer) eventLoop() {
+// 	defer func() {
+// 		p.proposingTimer.Stop()
+// 		p.wg.Done()
+// 	}()
 
-	for {
-		p.updateProposingTicker()
+// 	for {
+// 		p.updateProposingTicker()
 
-		select {
-		case <-p.ctx.Done():
-			return
-		// proposing interval timer has been reached
-		case <-p.proposingTimer.C:
-			metrics.ProposerProposeEpochCounter.Add(1)
-			p.totalEpochs++
+// 		select {
+// 		case <-p.ctx.Done():
+// 			return
+// 		// proposing interval timer has been reached
+// 		case <-p.proposingTimer.C:
+// 			metrics.ProposerProposeEpochCounter.Add(1)
+// 			p.totalEpochs++
 
-			// Attempt a proposing operation
-			if err := p.ProposeOp(p.ctx); err != nil {
-				log.Error("Proposing operation error", "error", err)
-				continue
-			}
-		}
-	}
-}
+// 			// Attempt a proposing operation
+// 			if err := p.ProposeOp(p.ctx); err != nil {
+// 				log.Error("Proposing operation error", "error", err)
+// 				continue
+// 			}
+// 		}
+// 	}
+// }
 
 // Args represents the arguments to be passed to the RPC method.
 type Args struct {
@@ -191,6 +191,7 @@ type RPCReplyL2TxLists struct {
 	TxLists        []types.Transactions
 	TxListBytes    [][]byte
 	ParentMetaHash common.Hash
+	ParentBlockID  uint64
 }
 
 type CustomResponse struct {
@@ -213,12 +214,13 @@ func (p *RPC) GetL2TxLists(_ *http.Request, _ *Args, reply *RPCReplyL2TxLists) e
 		log.Info("Single L2 txList", "txList", txLists[0])
 	}
 
-	parentMetaHash, err := builder.GetParentMetaHash(p.proposer.ctx, p.proposer.rpc)
+	forkHeight := new(big.Int).SetUint64(p.proposer.chainConfig.ProtocolConfigs.OntakeForkHeight)
+	parent, err := p.proposer.getParentOfLatestProposedBlock(p.proposer.ctx, p.proposer.rpc, forkHeight)
 	if err != nil {
 		return err
 	}
 
-	*reply = RPCReplyL2TxLists{TxLists: txLists, TxListBytes: compressedTxLists, ParentMetaHash: parentMetaHash}
+	*reply = RPCReplyL2TxLists{TxLists: txLists, TxListBytes: compressedTxLists, ParentMetaHash: parent.MetaHash, ParentBlockID: parent.BlockId}
 	return nil
 }
 
@@ -273,32 +275,6 @@ func (c *CustomCodec) WriteResponse(w http.ResponseWriter, reply interface{}, me
 	encoder := json.NewEncoder(w)
 	return encoder.Encode(response)
 }
-
-// eventLoop starts the main loop of Taiko proposer.
-// func (p *Proposer) eventLoop() {
-// 	defer func() {
-// 		p.proposingTimer.Stop()
-// 		p.wg.Done()
-// 	}()
-
-// 	for {
-// 		p.updateProposingTicker()
-
-// 		select {
-// 		case <-p.ctx.Done():
-// 			return
-// 		// proposing interval timer has been reached
-// 		case <-p.proposingTimer.C:
-// 			metrics.ProposerProposeEpochCounter.Add(1)
-
-// 			// Attempt a proposing operation
-// 			if err := p.ProposeOp(p.ctx); err != nil {
-// 				log.Error("Proposing operation error", "error", err)
-// 				continue
-// 			}
-// 		}
-// 	}
-// }
 
 // Close closes the proposer instance.
 func (p *Proposer) Close(_ context.Context) {
@@ -689,4 +665,38 @@ func (p *Proposer) sendTx(ctx context.Context, txCandidate *txmgr.TxCandidate) e
 // Name returns the application name.
 func (p *Proposer) Name() string {
 	return "proposer"
+}
+
+// getParentOfLatestProposedBlock returns the parent block of the latest proposed block in protocol
+func (p *Proposer) getParentOfLatestProposedBlock(
+	ctx context.Context,
+	rpc *rpc.Client,
+	forkHeight *big.Int,
+) (*bindings.TaikoDataBlockV2, error) {
+	state, err := rpc.TaikoL1.State(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return nil, err
+	}
+
+	blockNum := new(big.Int).SetUint64(state.SlotB.NumBlocks - 1)
+	var parent bindings.TaikoDataBlockV2
+	if isBlockForked(forkHeight, blockNum) {
+		parent, err = rpc.GetL2BlockInfoV2(ctx, blockNum)
+	} else {
+		parent, err = rpc.GetL2BlockInfo(ctx, blockNum)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &parent, nil
+}
+
+// isBlockForked returns whether a fork scheduled at block s is active at the
+// given head block.
+func isBlockForked(s, head *big.Int) bool {
+	if s == nil || head == nil {
+		return false
+	}
+	return s.Cmp(head) <= 0
 }

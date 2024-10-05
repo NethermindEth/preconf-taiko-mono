@@ -163,7 +163,7 @@ func (s *Syncer) onBlockProposed(
 	meta metadata.TaikoBlockMetaData,
 	endIter eventIterator.EndBlockProposedEventIterFunc,
 ) error {
-	log.Info("onBlockProposed", "blockID", event.BlockId)
+	log.Info("onBlockProposed", "blockID", meta.GetBlockID())
 
 	// We simply ignore the genesis block's `BlockProposed` event.
 	if meta.GetBlockID().Cmp(common.Big0) == 0 {
@@ -547,7 +547,7 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 	// Insert the anchor transaction at the head of the transactions list
 	txList = append([]*types.Transaction{anchorTx}, txList...)
 
-	slog.Debug("Transaction List", "txList", txList)
+	log.Debug("Transaction List", "txList", txList)
 
 	var txListBytes []byte
 	if txListBytes, err = rlp.EncodeToBytes(txList); err != nil {
@@ -555,14 +555,13 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 		return err
 	}
 
-	slog.Debug("txListBytes length", "length", len(txListBytes))
+	log.Debug("txListBytes length", "length", len(txListBytes))
 
 	payload, err := s.createExecutionPayloads(
 		ctx,
 		nil,
 		parent.Hash(),
 		l1Origin,
-		headBlockID,
 		txListBytes,
 		baseFeeInfo.Basefee,
 		withdrawals,
