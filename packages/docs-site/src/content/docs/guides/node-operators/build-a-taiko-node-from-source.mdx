@@ -25,15 +25,27 @@ The taiko client replaces the [consensus client](https://ethereum.org/en/develop
 
 In this tutorial you will build the `taiko-client` as found in the [taiko monorepo](https://github.com/taikoxyz/taiko-mono).
 
-#### Execution Engine (taiko-geth)
+#### Execution Engine Options
 
-The execution engine is responsible for executing the block payloads it receives from the taiko client. It holds the latest state of the chain.
+You have two options for the execution engine:
 
-`taiko-geth` exposes the standard JSON-RPC API that Ethereum developers are familiar with, and can be used accordingly to query blockchain data and submit transactions to the network.
+##### Option 1: taiko-geth
 
-`taiko-geth` replaces the [execution client](https://ethereum.org/en/developers/docs/nodes-and-clients/) in an Ethereum mainnet node.
+`taiko-geth` is our fork of go-ethereum that's been modified to work with Taiko's protocol. It exposes the standard JSON-RPC API that Ethereum developers are familiar with.
 
-In this tutorial you will build the `taiko-geth` implementation of `go-ethereum` as found in the [`taiko-geth` repository](https://github.com/taikoxyz/taiko-geth).
+The latest version is `v1.11.1` and can be found at [us-docker.pkg.dev/evmchain/images/taiko-geth:v1.11.1](https://us-docker.pkg.dev/evmchain/images/taiko-geth).
+
+##### Option 2: Nethermind
+
+Alternatively, you can use Nethermind as your execution engine. Nethermind is a high-performance, highly configurable Ethereum client built on .NET that has been adapted to work with Taiko. 
+
+The latest version is `1.30.1` and can be found at [nethermind/nethermind:1.30.1](https://hub.docker.com/r/nethermind/nethermind).
+
+Both options are fully supported and offer similar functionality. Choose based on your preferences and requirements:
+- `taiko-geth`: Familiar for those coming from go-ethereum, battle-tested
+- Nethermind: Modern architecture, excellent performance, extensive monitoring
+
+For detailed Nethermind setup instructions, see our [Run a Taiko node with Nethermind](/guides/node-operators/run-a-taiko-node-with-nethermind) guide.
 
 ## Software Dependencies
 

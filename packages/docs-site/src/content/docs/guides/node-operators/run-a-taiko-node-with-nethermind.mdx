@@ -1,0 +1,176 @@
+---
+title: Run a Taiko node with Nethermind
+description: Learn how to run a Taiko node using Nethermind as the execution engine.
+---
+
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+This guide will help you set up a Taiko node using Nethermind as your execution engine instead of Geth.
+
+## Prerequisites
+
+Before you begin, ensure you have:
+- [Git](https://git-scm.com/) installed
+- [.NET SDK 8.0](https://dotnet.microsoft.com/download/dotnet/8.0) installed
+- [Docker](https://docs.docker.com/engine/install/) installed and running (if using Docker)
+- If using Windows, install [Git BASH](https://gitforwindows.org/) or [WSL](https://learn.microsoft.com/en-us/windows/wsl/install)
+
+## Hardware Requirements
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| CPU | 4 cores | 8+ cores |
+| RAM | 16GB | 32GB+ |
+| Storage | 500GB SSD | 1TB+ NVMe SSD |
+
+## Option 1: Using Docker (Recommended)
+
+<Steps>
+
+1. Clone simple-taiko-node
+
+    <Tabs>
+      <TabItem label="Mac/Linux">
+        ```sh
+        git clone https://github.com/taikoxyz/simple-taiko-node.git
+        cd simple-taiko-node
+        ```
+      </TabItem>
+      <TabItem label="Windows">
+        ```sh
+        git clone https://github.com/taikoxyz/simple-taiko-node.git
+        cd simple-taiko-node && git config core.autocrlf false
+        ```
+      </TabItem>
+    </Tabs>
+
+2. Copy the sample environment file
+
+    <Aside title="Info">
+    To run a `hekla` Taiko node please copy `.env.sample.hekla` instead of `.env.sample`.
+    </Aside>
+
+    ```sh
+    cp .env.sample .env
+    ```
+
+3. Configure your environment
+
+    Edit your `.env` file and set:
+    ```env
+    # Choose Nethermind as execution client
+    L2_EXECUTION_ENGINE=nethermind
+    L2_EXECUTION_ENGINE_IMAGE=nethermind/nethermind:1.30.1
+
+    # Set your L1 endpoints (required)
+    L1_ENDPOINT_HTTP=        # Your L1 HTTP endpoint
+    L1_ENDPOINT_WS=         # Your L1 WebSocket endpoint
+    L1_BEACON_HTTP=         # Your L1 Beacon node HTTP endpoint
+    ```
+
+    <Aside>
+    For the most up-to-date Nethermind configuration and setup instructions, please refer to the [official Nethermind documentation](https://docs.nethermind.io/nethermind/first-steps-with-nethermind/running-nethermind-post-merge).
+
+    When running Nethermind:
+    - For mainnet, use the `taiko-mainnet` configuration
+    - For testnet (Hekla), use the `taiko-hekla` configuration
+    </Aside>
+
+4. Start your node
+
+    ```sh
+    # For regular setup
+    docker compose up
+
+    # For Hekla testnet
+    docker compose -f docker-compose-hekla.yml up
+    ```
+
+</Steps>
+
+## Option 2: Building from Source
+
+<Steps>
+
+1. Install Nethermind
+
+    There are multiple ways to install Nethermind (Docker, binaries, or building from source). Please refer to the [official Nethermind installation guide](https://docs.nethermind.io/get-started/installing-nethermind) for all available options.
+
+2. Configure Nethermind
+
+    <Aside>
+    For detailed configuration options and explanations, please refer to the [official Nethermind configuration documentation](https://docs.nethermind.io/fundamentals/configuration).
+    </Aside>
+
+    Run Nethermind with the appropriate Taiko configuration:
+    ```sh
+    # For mainnet
+    nethermind --config taiko-mainnet
+
+    # For testnet (Hekla)
+    nethermind --config taiko-hekla
+    ```
+
+    These configurations include all the necessary settings optimized for running a Taiko node.
+
+3. Verify the node is running
+
+    You can check if your node is running by:
+    - Checking the logs for sync progress
+    - Using the JSON-RPC endpoint (default: http://localhost:8545)
+    - Monitoring through Nethermind's metrics (if enabled)
+
+</Steps>
+
+## Verifying Your Node
+
+1. Check if your node is running:
+    ```sh
+    curl http://localhost:8545 \
+      -X POST \
+      -H "Content-Type: application/json" \
+      --data '{"jsonrpc":"2.0","method":"eth_syncing","params":[],"id":1}'
+    ```
+
+2. Check your node's sync status:
+    ```sh
+    curl http://localhost:8545 \
+      -X POST \
+      -H "Content-Type: application/json" \
+      --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+    ```
+
+## Common Issues and Troubleshooting
+
+### Sync Issues
+- Ensure your L1 endpoint is stable and has sufficient rate limits
+- Check Nethermind logs for any error messages
+- Verify your network connectivity and ports are open
+
+### Performance Issues
+- Try enabling SnapSync in the Nethermind configuration
+- Ensure your hardware meets the minimum requirements
+- Consider using an NVMe SSD for better performance
+
+### JWT Authentication
+If you encounter authentication issues:
+1. Generate a new JWT secret:
+    ```sh
+    openssl rand -hex 32 > jwt.hex
+    ```
+2. Update your Nethermind configuration to use this JWT file
+3. Ensure both Nethermind and the Taiko client are using the same JWT file
+
+## Monitoring
+
+You can monitor your Nethermind node using:
+- Built-in Nethermind metrics endpoint
+- Grafana dashboard (when using Docker setup)
+- Log files for detailed debugging
+
+## Additional Resources
+
+- [Nethermind Documentation](https://docs.nethermind.io)
+- [Taiko Discord](https://discord.gg/taikoxyz) for community support
+- [Nethermind GitHub](https://github.com/NethermindEth/nethermind) for source code and issues
+- [Nethermind Discord](https://discord.com/invite/PaCMRFdvWT)

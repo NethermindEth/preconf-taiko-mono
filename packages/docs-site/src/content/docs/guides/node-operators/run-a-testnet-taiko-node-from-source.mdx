@@ -7,10 +7,13 @@ import { Aside, Card, Steps, Tabs, TabItem } from "@astrojs/starlight/components
 
 This tutorial explains how to run an Taiko node for our testnet Hekla from source code.
 
-## Building the Source Code
+## Prerequisites
 
-Please follow the [Building a Node from Source](/guides/node-operators/build-a-taiko-node-from-source) guide before continuing.
-This guide presumes you have built the required images already (`taiko-geth` and `taiko-client`).
+This guide presumes you have built the required components already:
+- `taiko-client`
+- An execution engine (either `taiko-geth` or `Nethermind`)
+
+See [build a node from source](/guides/node-operators/build-a-taiko-node-from-source) for build instructions.
 
 ## Hardware Requirements
 
@@ -22,23 +25,23 @@ These are the recommended specs of a [mainnet Geth node](https://geth.ethereum.o
 
 Node operators should plan for future storage needs as the requirements will grow continuously.
 
-### Create a JWT Secret
+## Communication between the execution engine and taiko-client
 
-`taiko-geth` and `taiko-client` communicate over the standard Ethereum engine API authrpc. This communication is secured using a shared secret.
+The execution engine and `taiko-client` communicate over the standard Ethereum engine API authrpc. This communication is secured using a shared secret.
 
-You will need to generate a shared secret in the form of a 32 byte hex string.
+1. Generate a JWT secret:
+    ```bash
+    openssl rand -hex 32 > jwt.hex
+    ```
 
-```bash
-openssl rand -hex 32 > jwt.txt
-```
+## Start the execution engine
 
-### Start `taiko-geth`
+It's generally better to start the execution engine before you start `taiko-client` as you will encounter less error messages.
 
-It's generally better to start `taiko-geth` before you start `taiko-client` as you will encounter less error messages.
+The execution engine can be started without `taiko-client` and will wait until `taiko-client` begins communicating.
 
-`taiko-geth` can be started without `taiko-client` and will wait until `taiko-client` begins communicating.
-
-<Steps>
+<Tabs>
+<TabItem label="taiko-geth">
 
 1. Navigate to your `taiko-geth` directory
 
@@ -47,7 +50,7 @@ It's generally better to start `taiko-geth` before you start `taiko-client` as y
 2. Copy the JWT secret you generated into the `taiko-geth` directory.
 
     ```bash
-    cp /path/to/jwt.txt .
+    cp /path/to/jwt.hex ./
     ```
 
 3. Start taiko-geth
@@ -56,39 +59,53 @@ It's generally better to start `taiko-geth` before you start `taiko-client` as y
     The JSON-RPC API will become available on port 28545.
 
     ```bash
-        ./build/bin/geth \
-            --taiko \
-            --networkid 167009 \
-            --gcmode archive \
-            --datadir ./data/taiko-geth \
-            --metrics \
-            --metrics.expensive \
-            --metrics.addr "0.0.0.0" \
-            --bootnodes enode://2f7ee605f84362671e7d7c6d47b69a3358b0d87e9ba4648befcae8b19453275ed19059db347c459384c1a3e5486419233c06bf6c4c6f489d81ace6f301a2a446@43.153.55.134:30303,enode://c067356146268d2855ad356c1ce36ba9f78c1633a72f9b7f686679c2ffe04bab6d24e48ef6eefb0e01aa00dff5024f7f94bc583da90b6027f40be4129bbbc5fd@43.153.90.191:30303,enode://acc2bdb6416feddff9734bee1e6de91e684e9df5aeb1d36698cc78b920600aed36a2871e4ad0cf4521afcdc2cde8e2cd410a57038767c356d4ce6c69b9107a5a@170.106.109.12:30303,enode://eb5079aae185d5d8afa01bfd2d349da5b476609aced2b57c90142556cf0ee4a152bcdd724627a7de97adfc2a68af5742a8f58781366e6a857d4bde98de6fe986@34.66.210.65:30303,enode://2294f526cbb7faa778192289c252307420532191438ce821d3c50232e019a797bda8c8f8541de0847e953bb03096123856935e32294de9814d15d120131499ba@34.72.186.213:30303 \
-            --authrpc.addr "0.0.0.0" \
-            --authrpc.port 28551 \
-            --authrpc.vhosts "*" \
-            --authrpc.jwtsecret ./jwt.txt \
-            --http \
-            --http.api admin,debug,eth,net,web3,txpool,miner,taiko \
-            --http.addr "0.0.0.0" \
-            --http.port 28545 \
-            --http.vhosts "*" \
-            --ws \
-            --ws.api admin,debug,eth,net,web3,txpool,miner,taiko \
-            --ws.addr "0.0.0.0" \
-            --ws.port 28546 \
-            --ws.origins "*" \
-            --gpo.ignoreprice "100000000" \
-            --port 30304 \
-            --syncmode full \
-            --state.scheme=path
+    ./build/bin/geth \
+        --taiko \
+        --networkid 167009 \
+        --gcmode archive \
+        --datadir ./data/taiko-geth \
+        --metrics \
+        --metrics.expensive \
+        --metrics.addr "0.0.0.0" \
+        --bootnodes enode://2f7ee605f84362671e7d7c6d47b69a3358b0d87e9ba4648befcae8b19453275ed19059db347c459384c1a3e5486419233c06bf6c4c6f489d81ace6f301a2a446@43.153.55.134:30303,enode://c067356146268d2855ad356c1ce36ba9f78c1633a72f9b7f686679c2ffe04bab6d24e48ef6eefb0e01aa00dff5024f7f94bc583da90b6027f40be4129bbbc5fd@43.153.90.191:30303,enode://acc2bdb6416feddff9734bee1e6de91e684e9df5aeb1d36698cc78b920600aed36a2871e4ad0cf4521afcdc2cde8e2cd410a57038767c356d4ce6c69b9107a5a@170.106.109.12:30303,enode://eb5079aae185d5d8afa01bfd2d349da5b476609aced2b57c90142556cf0ee4a152bcdd724627a7de97adfc2a68af5742a8f58781366e6a857d4bde98de6fe986@34.66.210.65:30303,enode://2294f526cbb7faa778192289c252307420532191438ce821d3c50232e019a797bda8c8f8541de0847e953bb03096123856935e32294de9814d15d120131499ba@34.72.186.213:30303 \
+        --authrpc.addr "0.0.0.0" \
+        --authrpc.port 28551 \
+        --authrpc.vhosts "*" \
+        --authrpc.jwtsecret ./jwt.txt
     ```
-</Steps>
 
-### Start `taiko-client`
+</TabItem>
+<TabItem label="Nethermind">
 
-This guide assumes you are running both `taiko-geth` and `taiko-client` on the same machine.
+1. Navigate to your Nethermind directory
+
+    Find the directory where you installed Nethermind. For installation options, please refer to the [official Nethermind installation guide](https://docs.nethermind.io/get-started/installing-nethermind).
+
+2. Copy the JWT secret
+
+    ```bash
+    cp /path/to/jwt.hex ./
+    ```
+
+3. Start Nethermind
+
+    <Aside>
+    For detailed configuration options and explanations, please refer to the [official Nethermind configuration documentation](https://docs.nethermind.io/fundamentals/configuration).
+    </Aside>
+
+    Run Nethermind with the Taiko testnet (Hekla) configuration:
+    ```bash
+    nethermind --config taiko-hekla
+    ```
+
+    This configuration includes all the necessary settings optimized for running a Taiko node.
+
+</TabItem>
+</Tabs>
+
+## Start taiko-client
+
+This guide assumes you are running both the execution engine and `taiko-client` on the same machine.
 
 If you aren't, you can configure the ports and addresses so that the services can access each other.
 
@@ -97,15 +114,13 @@ If you aren't, you can configure the ports and addresses so that the services ca
 
     Find the directory where you built the `taiko-client` binary.
 
-2. Copy the JWT secret
-
-    <Aside>
-    This should be the *same* JWT secret you used in the previous step for `taiko-geth`.
-    </Aside>
+2. Copy the JWT secret you generated into the `taiko-client` directory.
 
     ```bash
-    cp /path/to/jwt.txt .
+    cp /path/to/jwt.hex ./
     ```
+
+    This should be the *same* JWT secret you used in the previous step for the execution engine.
 
 3. Set environment variables
 
@@ -124,17 +139,17 @@ If you aren't, you can configure the ports and addresses so that the services ca
 
     You can find all other configurable flags by running `./bin/taiko-client driver`.
 
-    This command assumes you've run the `taiko-geth` command as is, if you've changed ports please change them accordingly.
+    This command assumes you've run the execution engine command as is, if you've changed ports please change them accordingly.
 
     ```bash
         ./bin/taiko-client driver \
             --l1.ws ${L1_WS} \
             --l1.beacon ${L1_BEACON_URL} \
-            --l2.ws ws://localhost:28546 \
+            --l2.ws ws://localhost:8546 \
             --taikoL1 0x79C9109b764609df928d16fC4a91e9081F7e87DB \
             --taikoL2 0x1670090000000000000000000000000000010001 \
-            --jwtSecret ./jwt.txt \
-            --l2.auth http://localhost:28551/ \
+            --jwt-secret ./jwt.hex \
+            --l2.auth http://localhost:8551/ \
             --verbosity 3 \
             --p2p.sync \
             --p2p.checkPointSyncUrl https://rpc.hekla.taiko.xyz
@@ -145,11 +160,18 @@ If you aren't, you can configure the ports and addresses so that the services ca
     </Aside>
 </Steps>
 
-### Syncing
+## Verify your node is syncing
 
-Once you've started `taiko-geth` and `taiko-client` properly you should see them communicate with each other and start syncing.
+Once you've started the execution engine and `taiko-client` properly you should see them communicate with each other and start syncing.
 
-Syncing can take several hours, depending on the size of the chain.
+You can verify your node is syncing by checking the logs, or by querying the latest L2 block from your execution engine's RPC endpoint:
+
+```bash
+curl http://localhost:8545 \
+    -X POST \
+    -H "Content-Type: application/json" \
+    --data '{"method":"eth_blockNumber","params":[],"id":1,"jsonrpc":"2.0"}'
+```
 
 ## Next Steps
 

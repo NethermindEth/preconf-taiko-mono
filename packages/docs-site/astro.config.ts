@@ -137,7 +137,10 @@ export default defineConfig({
                   label: "Run a Taiko node with Docker",
                   link: "/guides/node-operators/run-a-taiko-node-with-docker/",
                 },
-
+                {
+                  label: "Run a Taiko node with Nethermind",
+                  link: "/guides/node-operators/run-a-taiko-node-with-nethermind/",
+                },
                 {
                   label: "Run an Ethereum testnet node",
                   link: "/guides/node-operators/run-an-ethereum-testnet-node/",
