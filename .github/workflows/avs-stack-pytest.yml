@@ -34,7 +34,7 @@ jobs:
             cd ~/preconfirm-devnet-package
             kurtosis run --enclave taiko-preconf-devnet . --args-file network_params.yaml
 
-            cd ~/Taiko-Preconf-AVS/e2e-tests
+            cd ~/Taiko-Preconf-AVS/e2e_tests
             python3 -m venv venv
             source venv/bin/activate
             pip install -r requirements.txt
