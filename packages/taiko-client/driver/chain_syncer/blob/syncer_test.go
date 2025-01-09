@@ -64,7 +64,6 @@ func (s *BlobSyncerTestSuite) TestProcessL1Blocks() {
 }
 
 func (s *BlobSyncerTestSuite) TestProcessL1BlocksReorg() {
-	s.T().Skip("Skipping, preconfer changes")
 	s.ProposeAndInsertEmptyBlocks(s.p, s.s)
 	s.Nil(s.s.ProcessL1Blocks(context.Background()))
 }
