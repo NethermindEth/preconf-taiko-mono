@@ -23,7 +23,7 @@ import (
 // @contact.email info@taiko.xyz
 
 // @license.name MIT
-// @license.url https://github.com/taikoxyz/taiko-mono/blob/main/LICENSE.md
+// @license.url https://github.com/taikoxyz/taiko-mono/blob/main/LICENSE
 
 // @host eventindexer.hekla.taiko.xyz
 // Server represents an eventindexer http server instance.
@@ -53,10 +53,6 @@ func (opts NewServerOpts) Validate() error {
 
 	if opts.EventRepo == nil {
 		return eventindexer.ErrNoEventRepository
-	}
-
-	if opts.CorsOrigins == nil {
-		return eventindexer.ErrNoCORSOrigins
 	}
 
 	if opts.NFTBalanceRepo == nil {

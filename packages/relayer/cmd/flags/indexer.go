@@ -1,6 +1,8 @@
 package flags
 
 import (
+	"time"
+
 	"github.com/urfave/cli/v2"
 )
 
@@ -107,6 +109,20 @@ var (
 		Value:    0,
 		EnvVars:  []string{"MIN_FEE_TO_INDEX"},
 	}
+	WaitForConfirmationTimeout = &cli.DurationFlag{
+		Name:     "waitForConfirmationTimeout",
+		Usage:    "Timeout waiting for confirmations",
+		Value:    5 * time.Minute,
+		Category: indexerCategory,
+		EnvVars:  []string{"WAIT_FOR_CONFIRMATION_TIMEOUT"},
+	}
+	IndexingConfirmations = &cli.Uint64Flag{
+		Name:     "confirmations",
+		Usage:    "Confirmations to wait for on source chain before indexing an event",
+		Value:    1,
+		Category: indexerCategory,
+		EnvVars:  []string{"CONFIRMATIONS_BEFORE_INDEXING"},
+	}
 )
 
 var IndexerFlags = MergeFlags(CommonFlags, QueueFlags, []cli.Flag{
@@ -124,4 +140,6 @@ var IndexerFlags = MergeFlags(CommonFlags, QueueFlags, []cli.Flag{
 	EventName,
 	MinFeeToIndex,
 	TargetBlockNumber,
+	WaitForConfirmationTimeout,
+	IndexingConfirmations,
 })

@@ -32,7 +32,7 @@ func (i *Indexer) handleChainDataSyncedEvent(
 
 	// we need to wait for confirmations to confirm this event is not being reverted,
 	// removed, or reorged now.
-	confCtx, confCtxCancel := context.WithTimeout(ctx, defaultCtxTimeout)
+	confCtx, confCtxCancel := context.WithTimeout(ctx, i.cfg.ConfirmationTimeout)
 
 	defer confCtxCancel()
 
@@ -40,7 +40,7 @@ func (i *Indexer) handleChainDataSyncedEvent(
 		if err := relayer.WaitConfirmations(
 			confCtx,
 			i.srcEthClient,
-			uint64(defaultConfirmations),
+			i.confirmations,
 			event.Raw.TxHash,
 		); err != nil {
 			return err

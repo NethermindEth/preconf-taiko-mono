@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/url"
+	"sync"
 	"time"
 
 	"golang.org/x/exp/slog"
@@ -21,12 +22,12 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/bindings"
-	"github.com/taikoxyz/taiko-mono/packages/taiko-client/bindings/encoding"
+	"github.com/taikoxyz/taiko-mono/packages/taiko-client/bindings/metadata"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/driver/chain_syncer/beaconsync"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/driver/state"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/internal/metrics"
-	"github.com/taikoxyz/taiko-mono/packages/taiko-client/internal/utils"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/pkg/rpc"
+	"github.com/taikoxyz/taiko-mono/packages/taiko-client/pkg/utils"
 
 	anchorTxConstructor "github.com/taikoxyz/taiko-mono/packages/taiko-client/driver/anchor_tx_constructor"
 	txListDecompressor "github.com/taikoxyz/taiko-mono/packages/taiko-client/driver/txlist_decompressor"
@@ -44,11 +45,11 @@ type Syncer struct {
 	anchorConstructor  *anchorTxConstructor.AnchorTxConstructor // TaikoL2.anchor transactions constructor
 	txListDecompressor *txListDecompressor.TxListDecompressor   // Transactions list decompressor
 	// Used by BlockInserter
-	lastInsertedBlockID    *big.Int
-	reorgDetectedFlag      bool
-	maxRetrieveExponent    uint64
-	blobDatasource         *rpc.BlobDataSource
-	blockProposedEventChan chan *bindings.TaikoL1ClientBlockProposed
+	lastInsertedBlockID *big.Int
+	reorgDetectedFlag   bool
+	maxRetrieveExponent uint64
+	blobDatasource      *rpc.BlobDataSource
+	mutex               sync.Mutex
 }
 
 // NewSyncer creates a new syncer instance.
@@ -60,16 +61,15 @@ func NewSyncer(
 	maxRetrieveExponent uint64,
 	blobServerEndpoint *url.URL,
 	socialScanEndpoint *url.URL,
-	blockProposedEventChan chan *bindings.TaikoL1ClientBlockProposed,
 ) (*Syncer, error) {
-	configs, err := client.TaikoL1.GetConfig(&bind.CallOpts{Context: ctx})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get protocol configs: %w", err)
-	}
-
 	constructor, err := anchorTxConstructor.New(client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize anchor constructor: %w", err)
+	}
+
+	protocolConfigs, err := rpc.GetProtocolConfigs(client.TaikoL1, &bind.CallOpts{Context: ctx})
+	if err != nil {
+		return nil, err
 	}
 
 	return &Syncer{
@@ -79,7 +79,7 @@ func NewSyncer(
 		progressTracker:   progressTracker,
 		anchorConstructor: constructor,
 		txListDecompressor: txListDecompressor.NewTxListDecompressor(
-			uint64(configs.BlockMaxGasLimit),
+			uint64(protocolConfigs.BlockMaxGasLimit),
 			rpc.BlockMaxTxListBytes,
 			client.L2.ChainID,
 		),
@@ -90,13 +90,14 @@ func NewSyncer(
 			blobServerEndpoint,
 			socialScanEndpoint,
 		),
-		blockProposedEventChan: blockProposedEventChan,
 	}, nil
 }
 
 // ProcessL1Blocks fetches all `TaikoL1.BlockProposed` events between given
 // L1 block heights, and then tries inserting them into L2 execution engine's blockchain.
 func (s *Syncer) ProcessL1Blocks(ctx context.Context) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	for {
 		if err := s.processL1Blocks(ctx); err != nil {
 			return err
@@ -164,30 +165,24 @@ func (s *Syncer) processL1Blocks(ctx context.Context) error {
 	return nil
 }
 
-func (s *Syncer) BlockProposedTestWrapper(ctx context.Context, event *bindings.TaikoL1ClientBlockProposed) error {
-	return s.onBlockProposed(ctx, event, nil)
-}
-
 // OnBlockProposed is a `BlockProposed` event callback which responsible for
 // inserting the proposed block one by one to the L2 execution engine.
 func (s *Syncer) onBlockProposed(
 	ctx context.Context,
-	event *bindings.TaikoL1ClientBlockProposed,
+	meta metadata.TaikoBlockMetaData,
 	endIter eventIterator.EndBlockProposedEventIterFunc,
 ) error {
-	log.Info("onBlockProposed", "blockID", event.BlockId)
-
-	s.blockProposedEventChan <- event
+	log.Info("onBlockProposed", "blockID", meta.GetBlockID())
 
 	// We simply ignore the genesis block's `BlockProposed` event.
-	if event.BlockId.Cmp(common.Big0) == 0 {
+	if meta.GetBlockID().Cmp(common.Big0) == 0 {
 		return nil
 	}
 
 	// If we are not inserting a block whose parent block is the latest verified block in protocol,
 	// and the node hasn't just finished the P2P sync, we check if the L1 chain has been reorged.
 	if !s.progressTracker.Triggered() {
-		reorgCheckResult, err := s.checkReorg(ctx, event)
+		reorgCheckResult, err := s.checkReorg(ctx, meta.GetBlockID())
 		if err != nil {
 			return err
 		}
@@ -211,23 +206,22 @@ func (s *Syncer) onBlockProposed(
 		}
 	}
 	// Ignore those already inserted blocks.
-	if s.lastInsertedBlockID != nil && event.BlockId.Cmp(s.lastInsertedBlockID) <= 0 {
+	if s.lastInsertedBlockID != nil && meta.GetBlockID().Cmp(s.lastInsertedBlockID) <= 0 {
 		return nil
 	}
 
 	log.Info(
 		"New BlockProposed event",
-		"l1Height", event.Raw.BlockNumber,
-		"l1Hash", event.Raw.BlockHash,
-		"blockID", event.BlockId,
-		"removed", event.Raw.Removed,
+		"l1Height", meta.GetRawBlockHeight(),
+		"l1Hash", meta.GetRawBlockHash(),
+		"blockID", meta.GetBlockID(),
 	)
 
 	// If the event's timestamp is in the future, we wait until the timestamp is reached, should
 	// only happen when testing.
-	if event.Meta.Timestamp > uint64(time.Now().Unix()) {
-		log.Warn("Future L2 block, waiting", "L2BlockTimestamp", event.Meta.Timestamp, "now", time.Now().Unix())
-		time.Sleep(time.Until(time.Unix(int64(event.Meta.Timestamp), 0)))
+	if meta.GetTimestamp() > uint64(time.Now().Unix()) {
+		log.Warn("Future L2 block, waiting", "L2BlockTimestamp", meta.GetTimestamp(), "now", time.Now().Unix())
+		time.Sleep(time.Until(time.Unix(int64(meta.GetTimestamp()), 0)))
 	}
 
 	// Fetch the L2 parent block, if the node is just finished a P2P sync, we simply use the tracker's
@@ -238,13 +232,13 @@ func (s *Syncer) onBlockProposed(
 	)
 	if s.progressTracker.Triggered() {
 		// Already synced through beacon sync, just skip this event.
-		if event.BlockId.Cmp(s.progressTracker.LastSyncedBlockID()) <= 0 {
+		if meta.GetBlockID().Cmp(s.progressTracker.LastSyncedBlockID()) <= 0 {
 			return nil
 		}
 
 		parent, err = s.rpc.L2.HeaderByHash(ctx, s.progressTracker.LastSyncedBlockHash())
 	} else {
-		parent, err = s.rpc.L2ParentByBlockID(ctx, event.BlockId)
+		parent, err = s.rpc.L2ParentByBlockID(ctx, meta.GetBlockID())
 	}
 	if err != nil {
 		return fmt.Errorf("failed to fetch L2 parent block: %w", err)
@@ -257,76 +251,39 @@ func (s *Syncer) onBlockProposed(
 		"beaconSyncTriggered", s.progressTracker.Triggered(),
 	)
 
-	tx, err := s.rpc.L1.TransactionInBlock(ctx, event.Raw.BlockHash, event.Raw.TxIndex)
+	tx, err := s.rpc.L1.TransactionInBlock(ctx, meta.GetRawBlockHash(), meta.GetTxIndex())
 	if err != nil {
 		return fmt.Errorf("failed to fetch original TaikoL1.proposeBlock transaction: %w", err)
 	}
 
-	// first see if we have a CalldataTxList event in the same transaction
-	// Get the transaction receipt
-	receipt, err := s.rpc.L1.TransactionReceipt(ctx, tx.Hash())
+	// Decode transactions list.
+	var txListFetcher txlistFetcher.TxListFetcher
+	if meta.GetBlobUsed() {
+		txListFetcher = txlistFetcher.NewBlobTxListFetcher(s.rpc.L1Beacon, s.blobDatasource)
+	} else {
+		txListFetcher = txlistFetcher.NewCalldataFetch(s.rpc)
+	}
+	txListBytes, err := txListFetcher.Fetch(ctx, tx, meta)
 	if err != nil {
 		return fmt.Errorf("failed to get transaction receipt: %w", err)
-	}
-
-	var txListBytes []byte
-	calldataTxListFound := false
-
-	// first lets try to see if we can find a matching CalldataTxList event
-	// with the same blockID, to see if a contract sent this event via calldata.
-	// because in this case, the txList will not be available in the transactions
-	// arguments for decoding.
-	for _, vLog := range receipt.Logs {
-		// Use the generated binding's method to parse the log
-		calldataEvent, err := s.rpc.TaikoL1.ParseCalldataTxList(*vLog)
-		if err == nil {
-			log.Info("CalldataTxList event found", "blockID", calldataEvent.BlockId.String())
-			if calldataEvent.BlockId.Cmp(event.BlockId) != 0 {
-				log.Warn("CalldataTxList event blockID doesnt match",
-					"wantBlockID", event.BlockId.String(),
-					"eventBlockID", calldataEvent.BlockId.String(),
-				)
-				continue
-			}
-			txListBytes = calldataEvent.TxList
-			calldataTxListFound = true
-			break
-		}
-	}
-
-	// if not, then we want to fetch it from the tx args.
-	if !calldataTxListFound {
-		// Decode transactions list.
-		var txListFetcher txlistFetcher.TxListFetcher
-		if event.Meta.BlobUsed {
-			txListFetcher = txlistFetcher.NewBlobTxListFetcher(s.rpc.L1Beacon, s.blobDatasource)
-		} else {
-			txListFetcher = new(txlistFetcher.CalldataFetcher)
-		}
-
-		header, err := s.rpc.L1.HeaderByNumber(ctx, new(big.Int).SetUint64(event.Raw.BlockNumber))
-		if err != nil {
-			return fmt.Errorf("failed to get header by number: %w", err)
-		}
-
-		txListBytes, err = txListFetcher.Fetch(ctx, tx, &event.Meta, event.Raw.BlockNumber, header.Time)
-		if err != nil {
-			return fmt.Errorf("failed to fetch tx list: %w", err)
-		}
 	}
 
 	// Decompress the transactions list and try to insert a new head block to L2 EE.
 	payloadData, err := s.insertNewHead(
 		ctx,
-		event,
+		meta,
 		parent,
-		s.state.GetHeadBlockID(),
-		s.txListDecompressor.TryDecompress(event.BlockId, txListBytes, event.Meta.BlobUsed),
+		s.txListDecompressor.TryDecompress(
+			s.rpc.L2.ChainID,
+			meta.GetBlockID(),
+			txListBytes,
+			meta.GetBlobUsed(),
+		),
 		&rawdb.L1Origin{
-			BlockID:       event.BlockId,
+			BlockID:       meta.GetBlockID(),
 			L2BlockHash:   common.Hash{}, // Will be set by taiko-geth.
-			L1BlockHeight: new(big.Int).SetUint64(event.Raw.BlockNumber),
-			L1BlockHash:   event.Raw.BlockHash,
+			L1BlockHeight: meta.GetRawBlockHeight(),
+			L1BlockHash:   meta.GetRawBlockHash(),
 		},
 	)
 	if err != nil {
@@ -337,16 +294,15 @@ func (s *Syncer) onBlockProposed(
 
 	log.Info(
 		"🔗 New L2 block inserted",
-		"blockID", event.BlockId,
-		"height", payloadData.Number,
+		"blockID", meta.GetBlockID(),
 		"hash", payloadData.BlockHash,
 		"transactions", len(payloadData.Transactions),
 		"baseFee", utils.WeiToGWei(payloadData.BaseFeePerGas),
 		"withdrawals", len(payloadData.Withdrawals),
 	)
 
-	metrics.DriverL1CurrentHeightGauge.Set(float64(event.Raw.BlockNumber))
-	s.lastInsertedBlockID = event.BlockId
+	metrics.DriverL1CurrentHeightGauge.Set(float64(meta.GetRawBlockHeight().Uint64()))
+	s.lastInsertedBlockID = meta.GetBlockID()
 
 	if s.progressTracker.Triggered() {
 		s.progressTracker.ClearMeta()
@@ -359,9 +315,8 @@ func (s *Syncer) onBlockProposed(
 // block chain through Engine APIs.
 func (s *Syncer) insertNewHead(
 	ctx context.Context,
-	event *bindings.TaikoL1ClientBlockProposed,
+	meta metadata.TaikoBlockMetaData,
 	parent *types.Header,
-	headBlockID *big.Int,
 	txListBytes []byte,
 	l1Origin *rawdb.L1Origin,
 ) (*engine.ExecutableData, error) {
@@ -369,81 +324,119 @@ func (s *Syncer) insertNewHead(
 		"Try to insert a new L2 head block",
 		"parentNumber", parent.Number,
 		"parentHash", parent.Hash(),
-		"headBlockID", headBlockID,
 		"l1Origin", l1Origin,
 	)
 
-	// Insert a TaikoL2.anchor transaction at transactions list head
-	var txList []*types.Transaction
+	// Insert a TaikoL2.anchor / TaikoL2.anchorV2 transaction at transactions list head
+	var (
+		txList   []*types.Transaction
+		anchorTx *types.Transaction
+		baseFee  *big.Int
+		err      error
+	)
 	if len(txListBytes) != 0 {
 		if err := rlp.DecodeBytes(txListBytes, &txList); err != nil {
-			log.Error("Invalid txList bytes", "blockID", event.BlockId)
+			log.Error("Invalid txList bytes", "blockID", meta.GetBlockID())
 			return nil, err
 		}
 	}
 
-	// Get L2 baseFee
-	baseFeeInfo, err := s.rpc.TaikoL2.GetBasefee(
-		&bind.CallOpts{BlockNumber: parent.Number, Context: ctx},
-		event.Meta.L1Height,
-		uint32(parent.GasUsed),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get L2 baseFee: %w", encoding.TryParsingCustomError(err))
+	if baseFee, err = s.rpc.CalculateBaseFee(
+		ctx,
+		parent,
+		new(big.Int).SetUint64(meta.GetAnchorBlockID()),
+		meta.IsOntakeBlock(),
+		meta.GetBaseFeeConfig(),
+		meta.GetTimestamp(),
+	); err != nil {
+		return nil, err
+	}
+
+	if !meta.IsOntakeBlock() {
+		// Assemble a TaikoL2.anchor transaction
+		anchorTx, err = s.anchorConstructor.AssembleAnchorTx(
+			ctx,
+			new(big.Int).SetUint64(meta.GetAnchorBlockID()),
+			meta.GetAnchorBlockHash(),
+			new(big.Int).Add(parent.Number, common.Big1),
+			baseFee,
+			parent.GasUsed,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create TaikoL2.anchor transaction: %w", err)
+		}
+	} else {
+		// Assemble a TaikoL2.anchorV2 transaction
+		anchorBlockHeader, err := s.rpc.L1.HeaderByHash(ctx, meta.GetAnchorBlockHash())
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch anchor block: %w", err)
+		}
+		anchorTx, err = s.anchorConstructor.AssembleAnchorV2Tx(
+			ctx,
+			new(big.Int).SetUint64(meta.GetAnchorBlockID()),
+			anchorBlockHeader.Root,
+			parent.GasUsed,
+			meta.GetBaseFeeConfig(),
+			new(big.Int).Add(parent.Number, common.Big1),
+			baseFee,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create TaikoL2.anchorV2 transaction: %w", err)
+		}
 	}
 
 	log.Info(
 		"L2 baseFee",
-		"blockID", event.BlockId,
-		"baseFee", utils.WeiToGWei(baseFeeInfo.Basefee),
-		"syncedL1Height", event.Meta.L1Height,
+		"blockID", meta.GetBlockID(),
+		"baseFee", utils.WeiToGWei(baseFee),
+		"syncedL1Height", meta.GetRawBlockHeight(),
 		"parentGasUsed", parent.GasUsed,
 	)
-
-	// Get withdrawals
-	withdrawals := make(types.Withdrawals, len(event.DepositsProcessed))
-	for i, d := range event.DepositsProcessed {
-		withdrawals[i] = &types.Withdrawal{Address: d.Recipient, Amount: d.Amount.Uint64(), Index: d.Id}
-	}
-
-	// Assemble a TaikoL2.anchor transaction
-	anchorTx, err := s.anchorConstructor.AssembleAnchorTx(
-		ctx,
-		new(big.Int).SetUint64(event.Meta.L1Height),
-		event.Meta.L1Hash,
-		new(big.Int).Add(parent.Number, common.Big1),
-		baseFeeInfo.Basefee,
-		parent.GasUsed,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create TaikoL2.anchor transaction: %w", err)
-	}
 
 	// Insert the anchor transaction at the head of the transactions list
 	txList = append([]*types.Transaction{anchorTx}, txList...)
 	if txListBytes, err = rlp.EncodeToBytes(txList); err != nil {
-		log.Error("Encode txList error", "blockID", event.BlockId, "error", err)
+		log.Error("Encode txList error", "blockID", meta.GetBlockID(), "error", err)
 		return nil, err
 	}
 
 	payload, err := s.createExecutionPayloads(
 		ctx,
-		event,
+		meta,
 		parent.Hash(),
 		l1Origin,
-		headBlockID,
 		txListBytes,
-		baseFeeInfo.Basefee,
-		withdrawals,
+		baseFee,
+		make(types.Withdrawals, 0),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create execution payloads: %w", err)
 	}
 
+	var lastVerifiedBlockHash common.Hash
+	if lastVerifiedBlockHash, err = s.rpc.GetLastVerifiedBlockHash(ctx); err != nil {
+		log.Debug("Failed to fetch last verified block hash", "error", err)
+
+		stateVars, err := s.rpc.GetProtocolStateVariables(&bind.CallOpts{Context: ctx})
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch protocol state variables: %w", err)
+		}
+
+		lastVerifiedBlockHeader, err := s.rpc.L2.HeaderByNumber(
+			ctx,
+			new(big.Int).SetUint64(stateVars.B.LastVerifiedBlockId),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch last verified block: %w", err)
+		}
+
+		lastVerifiedBlockHash = lastVerifiedBlockHeader.Hash()
+	}
+
 	fc := &engine.ForkchoiceStateV1{
 		HeadBlockHash:      payload.BlockHash,
 		SafeBlockHash:      payload.BlockHash,
-		FinalizedBlockHash: payload.BlockHash,
+		FinalizedBlockHash: lastVerifiedBlockHash,
 	}
 
 	// Update the fork choice
@@ -529,35 +522,40 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 		"l1Origin", l1Origin,
 	)
 
-	l1Height, err := s.rpc.L1.BlockNumber(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get L1 height: %w", err)
-	}
+	// l1Height, err := s.rpc.L1.BlockNumber(ctx)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to get L1 height: %w", err)
+	// }
 
 	// Get L2 baseFee
-	baseFeeInfo, err := s.rpc.TaikoL2.GetBasefee(
-		&bind.CallOpts{BlockNumber: parent.Number, Context: ctx},
-		l1Height, // event.Meta.L1Height,
-		uint32(parent.GasUsed),
+	var (
+		baseFee *big.Int
+		err     error
 	)
-	if err != nil {
-		return fmt.Errorf("failed to get L2 baseFee: %w", encoding.TryParsingCustomError(err))
+	if baseFee, err = s.rpc.CalculateBaseFee(
+		ctx,
+		parent,
+		nil,
+		true,
+		// TODO: get from config?
+		&bindings.LibSharedDataBaseFeeConfig{
+			GasIssuancePerSecond:   uint32(1000000000),
+			AdjustmentQuotient:     uint8(200),
+			MinGasExcess:           uint64(1000000000),
+			MaxGasIssuancePerBlock: uint32(1000000000),
+		},
+		uint64(time.Now().Unix()),
+	); err != nil {
+		return err
 	}
 
 	log.Info(
 		"L2 baseFee",
 		"blockID", l1Origin.BlockID, // event.BlockId,
-		"baseFee", utils.WeiToGWei(baseFeeInfo.Basefee),
+		"baseFee", utils.WeiToGWei(baseFee),
 		"syncedL1Height", l1Origin.BlockID, // event.Meta.L1Height,
 		"parentGasUsed", parent.GasUsed,
 	)
-
-	// Get withdrawals
-	withdrawals := types.Withdrawals{}
-	// withdrawals := make(types.Withdrawals, len(l1Origin.DepositsProcessed))
-	// for i, d := range l1Origin.DepositsProcessed {
-	// 	withdrawals[i] = &types.Withdrawal{Address: d.Recipient, Amount: d.Amount.Uint64(), Index: d.Id}
-	// }
 
 	// Assemble a TaikoL2.anchor transaction
 	l1CurrentBlock := s.state.GetL1Current()
@@ -566,7 +564,7 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 		new(big.Int).SetUint64(l1CurrentBlock.Number.Uint64()),
 		l1CurrentBlock.Hash(),
 		new(big.Int).Add(parent.Number, common.Big1),
-		baseFeeInfo.Basefee,
+		baseFee,
 		parent.GasUsed,
 	)
 	if err != nil {
@@ -591,10 +589,9 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 		nil,
 		parent.Hash(),
 		l1Origin,
-		headBlockID,
 		txListBytes,
-		baseFeeInfo.Basefee,
-		withdrawals,
+		baseFee,
+		make(types.Withdrawals, 0),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create execution payloads: %w", err)
@@ -624,10 +621,9 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 // Engine APIs.
 func (s *Syncer) createExecutionPayloads(
 	ctx context.Context,
-	event *bindings.TaikoL1ClientBlockProposed,
+	meta metadata.TaikoBlockMetaData,
 	parentHash common.Hash,
 	l1Origin *rawdb.L1Origin,
-	headBlockID *big.Int,
 	txListBytes []byte,
 	baseFee *big.Int,
 	withdrawals types.Withdrawals,
@@ -635,7 +631,7 @@ func (s *Syncer) createExecutionPayloads(
 	fc := &engine.ForkchoiceStateV1{HeadBlockHash: parentHash}
 
 	var attributes *engine.PayloadAttributes
-	if event == nil {
+	if meta == nil {
 		currentTimestamp := uint64(time.Now().Unix())
 		attributes = &engine.PayloadAttributes{
 			Timestamp:             currentTimestamp,
@@ -643,44 +639,42 @@ func (s *Syncer) createExecutionPayloads(
 			SuggestedFeeRecipient: common.Address{},
 			Withdrawals:           withdrawals,
 			BlockMetadata: &engine.BlockMetadata{
-				HighestBlockID: headBlockID,
-				Beneficiary:    common.Address{},
-				GasLimit:       240000000 + consensus.AnchorGasLimit, //TODO: replace constant with value from config
-				Timestamp:      currentTimestamp,
-				TxList:         txListBytes,
-				MixHash:        common.Hash{},
-				ExtraData:      []byte{},
+				Beneficiary: common.Address{},
+				GasLimit:    240000000 + consensus.AnchorGasLimit, //TODO: replace constant with value from config
+				Timestamp:   currentTimestamp,
+				TxList:      txListBytes,
+				MixHash:     common.Hash{},
+				ExtraData:   []byte{},
 			},
 			BaseFeePerGas: baseFee,
 			L1Origin:      l1Origin,
 		}
 	} else {
 		attributes = &engine.PayloadAttributes{
-			Timestamp:             event.Meta.Timestamp,
-			Random:                event.Meta.Difficulty,
-			SuggestedFeeRecipient: event.Meta.Coinbase,
+			Timestamp:             meta.GetTimestamp(),
+			Random:                meta.GetDifficulty(),
+			SuggestedFeeRecipient: meta.GetCoinbase(),
 			Withdrawals:           withdrawals,
 			BlockMetadata: &engine.BlockMetadata{
-				HighestBlockID: headBlockID,
-				Beneficiary:    event.Meta.Coinbase,
-				GasLimit:       uint64(event.Meta.GasLimit) + consensus.AnchorGasLimit,
-				Timestamp:      event.Meta.Timestamp,
-				TxList:         txListBytes,
-				MixHash:        event.Meta.Difficulty,
-				ExtraData:      event.Meta.ExtraData[:],
+				Beneficiary: meta.GetCoinbase(),
+				GasLimit:    uint64(meta.GetGasLimit()) + consensus.AnchorGasLimit,
+				Timestamp:   meta.GetTimestamp(),
+				TxList:      txListBytes,
+				MixHash:     meta.GetDifficulty(),
+				ExtraData:   meta.GetExtraData(),
 			},
 			BaseFeePerGas: baseFee,
 			L1Origin:      l1Origin,
 		}
 
 		log.Debug(
-			"Event GasLimit and Consensus AnchorGasLimit",
-			"eventGasLimit", event.Meta.GasLimit,
+			"Meta GasLimit and Consensus AnchorGasLimit",
+			"metaGasLimit", meta.GetGasLimit(),
 			"consensusAnchorGasLimit", consensus.AnchorGasLimit,
 		)
 
 		log.Debug(
-			"blockID", event.BlockId,
+			"blockID", meta.GetBlockID(),
 		)
 	}
 	log.Debug(
@@ -689,12 +683,11 @@ func (s *Syncer) createExecutionPayloads(
 		"random", attributes.Random,
 		"suggestedFeeRecipient", attributes.SuggestedFeeRecipient,
 		"withdrawals", len(attributes.Withdrawals),
-		"highestBlockID", attributes.BlockMetadata.HighestBlockID,
 		"gasLimit", attributes.BlockMetadata.GasLimit,
 		"timestamp", attributes.BlockMetadata.Timestamp,
 		"mixHash", attributes.BlockMetadata.MixHash,
 		"baseFee", utils.WeiToGWei(attributes.BaseFeePerGas),
-		"extraData", string(attributes.BlockMetadata.ExtraData),
+		"extraData", common.Bytes2Hex(attributes.BlockMetadata.ExtraData),
 		"l1OriginHeight", attributes.L1Origin.L1BlockHeight,
 		"l1OriginHash", attributes.L1Origin.L1BlockHash,
 	)
@@ -717,8 +710,8 @@ func (s *Syncer) createExecutionPayloads(
 		return nil, fmt.Errorf("failed to get payload: %w", err)
 	}
 
-	if event != nil {
-		log.Debug("Event BlockId", "blockID", event.BlockId)
+	if meta != nil {
+		log.Debug("Meta BlockId", "blockID", meta.GetBlockID())
 	}
 	log.Debug(
 		"Payload",
@@ -806,11 +799,22 @@ func (s *Syncer) retrievePastBlock(
 		currentBlockID = 0
 	}
 
-	blockInfo, err := s.rpc.GetL2BlockInfo(ctx, new(big.Int).SetUint64(currentBlockID))
+	blockNum := new(big.Int).SetUint64(currentBlockID)
+	var blockInfo bindings.TaikoDataBlockV2
+	if s.state.IsOnTake(blockNum) {
+		blockInfo, err = s.rpc.GetL2BlockInfoV2(ctx, blockNum)
+	} else {
+		blockInfo, err = s.rpc.GetL2BlockInfo(ctx, blockNum)
+	}
+
 	if err != nil {
 		return nil, err
 	}
-	ts, err := s.rpc.GetTransition(ctx, new(big.Int).SetUint64(blockInfo.BlockId), blockInfo.VerifiedTransitionId)
+	ts, err := s.rpc.GetTransition(
+		ctx,
+		new(big.Int).SetUint64(blockInfo.BlockId),
+		uint32(blockInfo.VerifiedTransitionId.Uint64()),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -867,7 +871,7 @@ func (s *Syncer) retrievePastBlock(
 // checkReorg checks whether the L1 chain has been reorged, and resets the L1Current cursor if necessary.
 func (s *Syncer) checkReorg(
 	ctx context.Context,
-	event *bindings.TaikoL1ClientBlockProposed,
+	blockID *big.Int,
 ) (*rpc.ReorgCheckResult, error) {
 	// If the L2 chain is at genesis, we don't need to check L1 reorg.
 	if s.state.GetL1Current().Number == s.state.GenesisL1Height {
@@ -884,7 +888,7 @@ func (s *Syncer) checkReorg(
 		// 2. Parent block
 		reorgCheckResult, err = s.rpc.CheckL1Reorg(
 			ctx,
-			new(big.Int).Sub(event.BlockId, common.Big1),
+			new(big.Int).Sub(blockID, common.Big1),
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check whether L1 chain has been reorged: %w", err)

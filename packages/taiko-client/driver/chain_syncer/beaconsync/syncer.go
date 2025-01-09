@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/log"
 
+	"github.com/taikoxyz/taiko-mono/packages/taiko-client/bindings"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/bindings/encoding"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/driver/state"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/pkg/rpc"
@@ -70,10 +72,30 @@ func (s *Syncer) TriggerBeaconSync(blockID uint64) error {
 		return fmt.Errorf("unexpected NewPayload response status: %s", status.Status)
 	}
 
+	var lastVerifiedBlockHash common.Hash
+	if lastVerifiedBlockHash, err = s.rpc.GetLastVerifiedBlockHash(s.ctx); err != nil {
+		log.Debug("Failed to fetch the last verified block hash", "err", err)
+
+		stateVars, err := s.rpc.GetProtocolStateVariables(&bind.CallOpts{Context: s.ctx})
+		if err != nil {
+			return fmt.Errorf("failed to fetch protocol state variables: %w", err)
+		}
+
+		lastVerifiedBlockHeader, err := s.rpc.L2CheckPoint.HeaderByNumber(
+			s.ctx,
+			new(big.Int).SetUint64(stateVars.B.LastVerifiedBlockId),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to fetch the last verified block hash: %w", err)
+		}
+
+		lastVerifiedBlockHash = lastVerifiedBlockHeader.Hash()
+	}
+
 	fcRes, err := s.rpc.L2Engine.ForkchoiceUpdate(s.ctx, &engine.ForkchoiceStateV1{
 		HeadBlockHash:      headPayload.BlockHash,
-		SafeBlockHash:      headPayload.BlockHash,
-		FinalizedBlockHash: headPayload.BlockHash,
+		SafeBlockHash:      lastVerifiedBlockHash,
+		FinalizedBlockHash: lastVerifiedBlockHash,
 	}, nil)
 	if err != nil {
 		return err
@@ -104,11 +126,22 @@ func (s *Syncer) getBlockPayload(ctx context.Context, blockID uint64) (*engine.E
 
 	// If the sync mode is `full`, we need to verify the protocol verified block hash before syncing.
 	if s.syncMode == downloader.FullSync.String() {
-		blockInfo, err := s.rpc.GetL2BlockInfo(ctx, new(big.Int).SetUint64(blockID))
+		blockNum := new(big.Int).SetUint64(blockID)
+		var blockInfo bindings.TaikoDataBlockV2
+		if s.state.IsOnTake(blockNum) {
+			blockInfo, err = s.rpc.GetL2BlockInfoV2(ctx, blockNum)
+		} else {
+			blockInfo, err = s.rpc.GetL2BlockInfo(ctx, blockNum)
+		}
 		if err != nil {
 			return nil, err
 		}
-		ts, err := s.rpc.GetTransition(ctx, new(big.Int).SetUint64(blockInfo.BlockId), blockInfo.VerifiedTransitionId)
+		ts, err := s.rpc.GetTransition(
+			ctx,
+			new(big.Int).SetUint64(blockInfo.BlockId),
+
+			uint32(blockInfo.VerifiedTransitionId.Uint64()),
+		)
 		if err != nil {
 			return nil, err
 		}

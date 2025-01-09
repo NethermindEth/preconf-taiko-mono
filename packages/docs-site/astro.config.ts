@@ -33,11 +33,6 @@ export default defineConfig({
             label: "Event Indexer API",
             schema: "../eventindexer/docs/swagger.yaml",
           },
-          {
-            base: "api-reference/prover-server",
-            label: "Prover Server API",
-            schema: "../taiko-client/docs/swagger.yaml",
-          },
         ]),
       ],
       components: {
@@ -46,7 +41,8 @@ export default defineConfig({
       },
       title: "Docs",
       editLink: {
-        baseUrl: "https://github.com/taikoxyz/taiko-mono/tree/main/packages/docs-site",
+        baseUrl:
+          "https://github.com/taikoxyz/taiko-mono/edit/main/packages/docs-site",
       },
       customCss: ["./src/styles/custom.css"],
       logo: {
@@ -73,32 +69,37 @@ export default defineConfig({
           items: [
             { label: "What is Taiko?", link: "/core-concepts/what-is-taiko/" },
             {
-              label: "Based sequencing",
-              link: "/core-concepts/based-sequencing/",
-            },
-            {
               label: "Contestable rollups (BCR)",
-              link: "/core-concepts/contestable-rollups/",
+              link: "/core-concepts/contestable-rollup/",
             },
             {
               label: "Booster rollups (BBR)",
               link: "/core-concepts/booster-rollups/",
             },
             { label: "Multi-proofs", link: "/core-concepts/multi-proofs/" },
-            { label: "Block states", link: "/core-concepts/block-states" },
-            {
-              label: "Taiko nodes",
-              link: "/core-concepts/taiko-nodes/",
-            },
-            {
-              label: "Bridging",
-              link: "/core-concepts/bridging/",
-            },
             {
               label: "Inception layers",
               link: "/core-concepts/inception-layers/",
             },
           ],
+        },
+        {
+          label: "Taiko Protocol",
+          items: [
+            {
+              label: "Codebase Analysis",
+              collapsed: true,
+              items: [
+                {label: "TaikoL1 Contract", link: "/taiko-protocol/codebase-analysis/taikol1-contract"},
+                {label: "TaikoL2 Contract", link: "/taiko-protocol/codebase-analysis/taikol2-contract"},
+                {label: "SGXVerifier Contract", link: "/taiko-protocol/codebase-analysis/sgxverifier-contract"},
+              ],
+            },
+            { label: "Block states", link: "/taiko-protocol/block-states" },
+            { label: "Bridging", link: "/taiko-protocol/bridging" },
+            { label: "Economics", link: "/taiko-protocol/economics" },
+            { label: "Taiko nodes", link: "/taiko-protocol/taiko-nodes" },
+          ]
         },
         {
           label: "Guides",
@@ -111,8 +112,14 @@ export default defineConfig({
                   label: "Set up your wallet",
                   link: "/guides/app-developers/set-up-your-wallet/",
                 },
-                { label: "Receive tokens", link: "/guides/app-developers/receive-tokens/" },
-                { label: "Bridge tokens", link: "/guides/app-developers/bridge-tokens/" },
+                {
+                  label: "Receive tokens",
+                  link: "/guides/app-developers/receive-tokens/",
+                },
+                {
+                  label: "Bridge tokens",
+                  link: "/guides/app-developers/bridge-tokens/",
+                },
                 {
                   label: "Deploy a contract",
                   link: "/guides/app-developers/deploy-a-contract/",
@@ -157,6 +164,10 @@ export default defineConfig({
                   link: "/guides/node-operators/enable-a-prover/",
                 },
                 {
+                  label: "Deploy a ProverSet",
+                  link: "guides/node-operators/deploy-a-proverset/",
+                },
+                {
                   label: "Node troubleshooting",
                   link: "/guides/node-operators/node-troubleshooting/",
                 },
@@ -182,6 +193,10 @@ export default defineConfig({
             {
               label: "Network configuration",
               link: "/network-reference/network-configuration",
+            },
+            {
+              label: "Software releases",
+              link: "/network-reference/software-releases-and-deployments",
             },
             {
               label: "RPC configuration",

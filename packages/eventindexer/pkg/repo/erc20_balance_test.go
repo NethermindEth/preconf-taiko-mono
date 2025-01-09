@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"testing"
 
@@ -13,25 +14,25 @@ import (
 func Test_NewERC20BalanceRepo(t *testing.T) {
 	tests := []struct {
 		name    string
-		db      eventindexer.DB
+		db      db.DB
 		wantErr error
 	}{
 		{
 			"success",
-			&db.DB{},
+			&db.Database{},
 			nil,
 		},
 		{
 			"noDb",
 			nil,
-			eventindexer.ErrNoDB,
+			db.ErrNoDB,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := NewERC20BalanceRepository(tt.db)
-			if err != tt.wantErr {
+			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("NewERC20BalanceRepository() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}

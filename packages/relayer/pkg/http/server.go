@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"log/slog"
 	"math/big"
 	"net/http"
 	"os"
@@ -37,10 +38,10 @@ type ethClient interface {
 // @contact.email info@taiko.xyz
 
 // @license.name MIT
-// @license.url https://github.com/taikoxyz/taiko-mono/blob/main/LICENSE.md
+// @license.url https://github.com/taikoxyz/taiko-mono/blob/main/LICENSE
 
 // @host relayer.hekla.taiko.xyz
-// Server represents an relayer http server instance.
+// Server represents a relayer http server instance.
 type Server struct {
 	echo                    *echo.Echo
 	eventRepo               relayer.EventRepository
@@ -130,6 +131,11 @@ func (srv *Server) Start(address string) error {
 
 // Shutdown shuts down the HTTP server
 func (srv *Server) Shutdown(ctx context.Context) error {
+	// Close db connection.
+	if err := srv.eventRepo.Close(); err != nil {
+		slog.Error("Failed to close db connection", "err", err)
+	}
+
 	return srv.echo.Shutdown(ctx)
 }
 

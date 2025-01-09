@@ -9,11 +9,13 @@ import (
 	"github.com/cyberhorsey/errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/urfave/cli/v2"
+
 	"github.com/taikoxyz/taiko-mono/packages/eventindexer"
 	"github.com/taikoxyz/taiko-mono/packages/eventindexer/contracts/bridge"
 	"github.com/taikoxyz/taiko-mono/packages/eventindexer/contracts/taikol1"
+	"github.com/taikoxyz/taiko-mono/packages/eventindexer/pkg/db"
 	"github.com/taikoxyz/taiko-mono/packages/eventindexer/pkg/repo"
-	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -34,6 +36,8 @@ var (
 )
 
 type Indexer struct {
+	db db.DB
+
 	accountRepo      eventindexer.AccountRepository
 	eventRepo        eventindexer.EventRepository
 	nftBalanceRepo   eventindexer.NFTBalanceRepository
@@ -61,6 +65,12 @@ type Indexer struct {
 	syncMode SyncMode
 
 	blockSaveMutex *sync.Mutex
+
+	contractToMetadata      map[common.Address]*eventindexer.ERC20Metadata
+	contractToMetadataMutex *sync.Mutex
+
+	ontakeForkHeight              uint64
+	isPostOntakeForkHeightReached bool
 }
 
 func (i *Indexer) Start() error {
@@ -90,7 +100,7 @@ func (i *Indexer) eventLoop(ctx context.Context) {
 			slog.Info("event loop context done")
 			return
 		case <-t.C:
-			if err := i.filter(ctx, filterFunc); err != nil {
+			if err := i.filter(ctx); err != nil {
 				slog.Error("error filtering", "error", err)
 			}
 		}
@@ -174,6 +184,7 @@ func InitFromConfig(ctx context.Context, i *Indexer, cfg *Config) error {
 		}
 	}
 
+	i.db = db
 	i.blockSaveMutex = &sync.Mutex{}
 	i.accountRepo = accountRepository
 	i.eventRepo = eventRepository
@@ -194,10 +205,18 @@ func InitFromConfig(ctx context.Context, i *Indexer, cfg *Config) error {
 	i.indexNfts = cfg.IndexNFTs
 	i.indexERC20s = cfg.IndexERC20s
 	i.layer = cfg.Layer
+	i.contractToMetadata = make(map[common.Address]*eventindexer.ERC20Metadata, 0)
+	i.contractToMetadataMutex = &sync.Mutex{}
+	i.ontakeForkHeight = cfg.OntakeForkHeight
 
 	return nil
 }
 
 func (i *Indexer) Close(ctx context.Context) {
 	i.wg.Wait()
+
+	// Close db connection.
+	if err := i.db.Close(); err != nil {
+		slog.Error("Failed to close db connection", "err", err)
+	}
 }

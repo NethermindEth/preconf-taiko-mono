@@ -3,9 +3,8 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /**
- * - [__View Contract on Holesky Etherscan__](https://holesky.etherscan.io/address/0xe0c018615A074967db263abD4a98B4862dB4101f)
- * -
  * - [__View Contract on Taiko Mainnet Taikoscan__](https://taikoscan.network/address/0x4A045C5016B200F7E08a4caBB2cdA6E85bF53295)
+ * - [__View Contract on Taiko Hekla L2 Taikoscan__](https://hekla.taikoscan.network/address/0xf3FBa6f1E6C1998195239e7DD794c1EcEA8Da66B)
  */
 export const taikoonTokenAbi = [
   {
@@ -603,20 +602,17 @@ export const taikoonTokenAbi = [
 ] as const;
 
 /**
- * - [__View Contract on Holesky Etherscan__](https://holesky.etherscan.io/address/0xe0c018615A074967db263abD4a98B4862dB4101f)
- * -
  * - [__View Contract on Taiko Mainnet Taikoscan__](https://taikoscan.network/address/0x4A045C5016B200F7E08a4caBB2cdA6E85bF53295)
+ * - [__View Contract on Taiko Hekla L2 Taikoscan__](https://hekla.taikoscan.network/address/0xf3FBa6f1E6C1998195239e7DD794c1EcEA8Da66B)
  */
 export const taikoonTokenAddress = {
-  17000: '0xe0c018615A074967db263abD4a98B4862dB4101f',
-  31337: '0xa513E6E4b8f2a923D98304ec87F64353C4D5C853',
   167000: '0x4A045C5016B200F7E08a4caBB2cdA6E85bF53295',
+  167009: '0xf3FBa6f1E6C1998195239e7DD794c1EcEA8Da66B',
 } as const;
 
 /**
- * - [__View Contract on Holesky Etherscan__](https://holesky.etherscan.io/address/0xe0c018615A074967db263abD4a98B4862dB4101f)
- * -
  * - [__View Contract on Taiko Mainnet Taikoscan__](https://taikoscan.network/address/0x4A045C5016B200F7E08a4caBB2cdA6E85bF53295)
+ * - [__View Contract on Taiko Hekla L2 Taikoscan__](https://hekla.taikoscan.network/address/0xf3FBa6f1E6C1998195239e7DD794c1EcEA8Da66B)
  */
 export const taikoonTokenConfig = {
   address: taikoonTokenAddress,

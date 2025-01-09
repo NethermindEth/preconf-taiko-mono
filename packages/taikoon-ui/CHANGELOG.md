@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.3.0](https://github.com/taikoxyz/taiko-mono/compare/taikoon-ui-v1.2.0...taikoon-ui-v1.3.0) (2024-09-13)
+
+
+### Features
+
+* **taikoons:** updated whitelist ([#18082](https://github.com/taikoxyz/taiko-mono/issues/18082)) ([e340c10](https://github.com/taikoxyz/taiko-mono/commit/e340c102f0537d1b1531806f4164d18976bae503))
+
+
+### Build
+
+* **deps-dev:** bump @sveltejs/kit from 2.5.7 to 2.5.21 ([#17901](https://github.com/taikoxyz/taiko-mono/issues/17901)) ([7a32ac4](https://github.com/taikoxyz/taiko-mono/commit/7a32ac40a654521c82cb3ff5b6f5af87d0a915a4))
+* **deps:** bump @web3modal/common from 4.1.11 to 5.0.11 ([#17876](https://github.com/taikoxyz/taiko-mono/issues/17876)) ([6ac4eb0](https://github.com/taikoxyz/taiko-mono/commit/6ac4eb0141be1bc3332da6ff63e8bebd9c00e326))
+
+## [1.2.0](https://github.com/taikoxyz/taiko-mono/compare/taikoon-ui-v1.1.1...taikoon-ui-v1.2.0) (2024-07-04)
+
+
+### Features
+
+* **nfts:** taikoon-ui performance upgrades ([#17720](https://github.com/taikoxyz/taiko-mono/issues/17720)) ([936bb95](https://github.com/taikoxyz/taiko-mono/commit/936bb95057815e5473d36304058a34be8c81ff76))
+* **nfts:** taikoon-ui updated whitelist ([#17719](https://github.com/taikoxyz/taiko-mono/issues/17719)) ([4e5bdbb](https://github.com/taikoxyz/taiko-mono/commit/4e5bdbbe497c56a52a150dcc15213e8effb7a0d8))
+* **nfts:** taikoon-ui updated whitelist 28-06-2024 ([#17701](https://github.com/taikoxyz/taiko-mono/issues/17701)) ([3687b1e](https://github.com/taikoxyz/taiko-mono/commit/3687b1eb81f6032713e3ca18824778e9193c1314))
+
+
+### Bug Fixes
+
+* **nfts:** taikoon-ui bug fixing ([#17644](https://github.com/taikoxyz/taiko-mono/issues/17644)) ([2c90a7f](https://github.com/taikoxyz/taiko-mono/commit/2c90a7fee984c8c1e3389076a3ed933de4e67215))
+* **nfts:** taikoon-ui error reporting improved ([#17683](https://github.com/taikoxyz/taiko-mono/issues/17683)) ([116d3f4](https://github.com/taikoxyz/taiko-mono/commit/116d3f4886dea01333b829677ec9b6d4492479c6))
+
 ## [1.1.1](https://github.com/taikoxyz/taiko-mono/compare/taikoon-ui-v1.1.0...taikoon-ui-v1.1.1) (2024-06-17)
 
 

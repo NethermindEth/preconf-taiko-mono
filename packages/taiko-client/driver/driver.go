@@ -21,8 +21,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/urfave/cli/v2"
 
-	"github.com/taikoxyz/taiko-mono/packages/taiko-client/bindings"
 	chainSyncer "github.com/taikoxyz/taiko-mono/packages/taiko-client/driver/chain_syncer"
+	softblocks "github.com/taikoxyz/taiko-mono/packages/taiko-client/driver/soft_blocks"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/driver/state"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/pkg/rpc"
 )
@@ -36,17 +36,16 @@ const (
 // contract.
 type Driver struct {
 	*Config
-	rpc           *rpc.Client
-	l2ChainSyncer *chainSyncer.L2ChainSyncer
-	state         *state.State
+	rpc             *rpc.Client
+	l2ChainSyncer   *chainSyncer.L2ChainSyncer
+	softblockServer *softblocks.SoftBlockAPIServer
+	state           *state.State
 
 	l1HeadCh  chan *types.Header
 	l1HeadSub event.Subscription
 
 	ctx context.Context
 	wg  sync.WaitGroup
-
-	blockProposedEventChan chan *bindings.TaikoL1ClientBlockProposed
 }
 
 // InitFromCli initializes the given driver instance based on the command line flags.
@@ -84,9 +83,6 @@ func (d *Driver) InitFromConfig(ctx context.Context, cfg *Config) (err error) {
 		log.Warn("P2P syncing verified blocks enabled, but no connected peer found in L2 execution engine")
 	}
 
-	eventChan := make(chan *bindings.TaikoL1ClientBlockProposed, 200)
-	d.blockProposedEventChan = eventChan
-
 	if d.l2ChainSyncer, err = chainSyncer.New(
 		d.ctx,
 		d.rpc,
@@ -96,12 +92,23 @@ func (d *Driver) InitFromConfig(ctx context.Context, cfg *Config) (err error) {
 		cfg.MaxExponent,
 		cfg.BlobServerEndpoint,
 		cfg.SocialScanEndpoint,
-		eventChan,
 	); err != nil {
 		return err
 	}
 
 	d.l1HeadSub = d.state.SubL1HeadsFeed(d.l1HeadCh)
+
+	if d.SoftBlockServerPort > 0 {
+		if d.softblockServer, err = softblocks.New(
+			d.SoftBlockServerCORSOrigins,
+			d.SoftBlockServerJWTSecret,
+			d.l2ChainSyncer.BlobSyncer(),
+			d.rpc,
+			d.Config.SoftBlockServerCheckSig,
+		); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -113,6 +120,15 @@ func (d *Driver) Start() error {
 	go d.reportProtocolStatus()
 	go d.exchangeTransitionConfigLoop()
 
+	// Start the soft block server if it is enabled.
+	if d.softblockServer != nil {
+		go func() {
+			if err := d.softblockServer.Start(d.SoftBlockServerPort); err != nil {
+				log.Crit("Failed to start soft block server", "error", err)
+			}
+		}()
+	}
+
 	return nil
 }
 
@@ -120,6 +136,12 @@ func (d *Driver) Start() error {
 func (d *Driver) Close(_ context.Context) {
 	d.l1HeadSub.Unsubscribe()
 	d.state.Close()
+	// Close the soft block server if it is enabled.
+	if d.softblockServer != nil {
+		if err := d.softblockServer.Shutdown(d.ctx); err != nil {
+			log.Error("Failed to shutdown soft block server", "error", err)
+		}
+	}
 	d.wg.Wait()
 }
 
@@ -189,9 +211,15 @@ func (d *Driver) ChainSyncer() *chainSyncer.L2ChainSyncer {
 
 // reportProtocolStatus reports some protocol status intervally.
 func (d *Driver) reportProtocolStatus() {
+	protocolConfigs, err := rpc.GetProtocolConfigs(d.rpc.TaikoL1, &bind.CallOpts{Context: d.ctx})
+	if err != nil {
+		log.Error("Failed to get protocol configs", "error", err)
+		return
+	}
+
 	var (
 		ticker       = time.NewTicker(protocolStatusReportInterval)
-		maxNumBlocks uint64
+		maxNumBlocks = protocolConfigs.BlockMaxProposals
 	)
 	d.wg.Add(1)
 
@@ -199,25 +227,6 @@ func (d *Driver) reportProtocolStatus() {
 		ticker.Stop()
 		d.wg.Done()
 	}()
-
-	if err := backoff.Retry(
-		func() error {
-			if d.ctx.Err() != nil {
-				return nil
-			}
-			configs, err := d.rpc.TaikoL1.GetConfig(&bind.CallOpts{Context: d.ctx})
-			if err != nil {
-				return err
-			}
-
-			maxNumBlocks = configs.BlockMaxProposals
-			return nil
-		},
-		backoff.WithContext(backoff.NewConstantBackOff(d.RetryInterval), d.ctx),
-	); err != nil {
-		log.Error("Failed to get protocol state variables", "error", err)
-		return
-	}
 
 	for {
 		select {
@@ -299,24 +308,6 @@ func (p *RPC) AdvanceL2ChainHeadWithNewBlocks(_ *http.Request, args *Args, reply
 	}
 
 	*reply = "Request received and processed successfully"
-	return nil
-}
-
-type RPCReplyBlockProposed struct {
-	BlockID    uint64
-	TxListHash [32]byte
-	Proposer   common.Address
-}
-
-func (p *RPC) WaitForBlockProposed(_ *http.Request, _ *Args, reply *RPCReplyBlockProposed) error {
-	log.Info("Waiting for BlockProposed event")
-	blockProposedEvent := <-p.driver.blockProposedEventChan
-	*reply = RPCReplyBlockProposed{
-		BlockID:    blockProposedEvent.BlockId.Uint64(),
-		TxListHash: blockProposedEvent.Meta.BlobHash,
-		Proposer:   blockProposedEvent.Meta.Sender,
-	}
-	log.Info("BlockProposed event received", "reply", *reply)
 	return nil
 }
 

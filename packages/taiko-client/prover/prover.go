@@ -2,10 +2,8 @@ package prover
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -17,9 +15,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/bindings"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/bindings/encoding"
+	"github.com/taikoxyz/taiko-mono/packages/taiko-client/bindings/metadata"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/internal/metrics"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/internal/version"
 	eventIterator "github.com/taikoxyz/taiko-mono/packages/taiko-client/pkg/chain_iterator/event_iterator"
@@ -29,7 +29,6 @@ import (
 	proofProducer "github.com/taikoxyz/taiko-mono/packages/taiko-client/prover/proof_producer"
 	proofSubmitter "github.com/taikoxyz/taiko-mono/packages/taiko-client/prover/proof_submitter"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/prover/proof_submitter/transaction"
-	"github.com/taikoxyz/taiko-mono/packages/taiko-client/prover/server"
 	state "github.com/taikoxyz/taiko-mono/packages/taiko-client/prover/shared_state"
 )
 
@@ -43,15 +42,13 @@ type Prover struct {
 	rpc *rpc.Client
 
 	// Guardian prover related
-	server                    *server.ProverServer
 	guardianProverHeartbeater guardianProverHeartbeater.BlockSenderHeartbeater
 
 	// Contract configurations
-	protocolConfig *bindings.TaikoDataConfig
+	protocolConfigs *bindings.TaikoDataConfig
 
 	// States
-	sharedState     *state.SharedState
-	genesisHeightL1 uint64
+	sharedState *state.SharedState
 
 	// Event handlers
 	blockProposedHandler       handler.BlockProposedHandler
@@ -64,16 +61,19 @@ type Prover struct {
 	proofSubmitters []proofSubmitter.Submitter
 	proofContester  proofSubmitter.Contester
 
-	assignmentExpiredCh chan *bindings.TaikoL1ClientBlockProposed
+	assignmentExpiredCh chan metadata.TaikoBlockMetaData
 	proveNotify         chan struct{}
+	aggregationNotify   chan uint16
 
 	// Proof related channels
-	proofSubmissionCh chan *proofProducer.ProofRequestBody
-	proofContestCh    chan *proofProducer.ContestRequestBody
-	proofGenerationCh chan *proofProducer.ProofWithHeader
+	proofSubmissionCh      chan *proofProducer.ProofRequestBody
+	proofContestCh         chan *proofProducer.ContestRequestBody
+	proofGenerationCh      chan *proofProducer.ProofWithHeader
+	batchProofGenerationCh chan *proofProducer.BatchProofs
 
 	// Transactions manager
-	txmgr *txmgr.SimpleTxManager
+	txmgr        *txmgr.SimpleTxManager
+	privateTxmgr *txmgr.SimpleTxManager
 
 	ctx context.Context
 	wg  sync.WaitGroup
@@ -86,11 +86,16 @@ func (p *Prover) InitFromCli(ctx context.Context, c *cli.Context) error {
 		return err
 	}
 
-	return InitFromConfig(ctx, p, cfg, nil)
+	return InitFromConfig(ctx, p, cfg, nil, nil)
 }
 
 // InitFromConfig initializes the prover instance based on the given configurations.
-func InitFromConfig(ctx context.Context, p *Prover, cfg *Config, txMgr *txmgr.SimpleTxManager) (err error) {
+func InitFromConfig(
+	ctx context.Context,
+	p *Prover, cfg *Config,
+	txMgr *txmgr.SimpleTxManager,
+	privateTxMgr *txmgr.SimpleTxManager,
+) (err error) {
 	p.cfg = cfg
 	p.ctx = ctx
 	// Initialize state which will be shared by event handlers.
@@ -119,20 +124,21 @@ func InitFromConfig(ctx context.Context, p *Prover, cfg *Config, txMgr *txmgr.Si
 	}
 
 	// Configs
-	protocolConfigs, err := p.rpc.TaikoL1.GetConfig(&bind.CallOpts{Context: ctx})
+	protocolConfigs, err := rpc.GetProtocolConfigs(p.rpc.TaikoL1, &bind.CallOpts{Context: p.ctx})
 	if err != nil {
 		return fmt.Errorf("failed to get protocol configs: %w", err)
 	}
-	p.protocolConfig = &protocolConfigs
+	p.protocolConfigs = &protocolConfigs
+	log.Info("Protocol configs", "configs", p.protocolConfigs)
 
-	log.Info("Protocol configs", "configs", p.protocolConfig)
-
-	chBufferSize := p.protocolConfig.BlockMaxProposals
+	chBufferSize := p.protocolConfigs.BlockMaxProposals
 	p.proofGenerationCh = make(chan *proofProducer.ProofWithHeader, chBufferSize)
-	p.assignmentExpiredCh = make(chan *bindings.TaikoL1ClientBlockProposed, chBufferSize)
-	p.proofSubmissionCh = make(chan *proofProducer.ProofRequestBody, p.cfg.Capacity)
-	p.proofContestCh = make(chan *proofProducer.ContestRequestBody, p.cfg.Capacity)
+	p.batchProofGenerationCh = make(chan *proofProducer.BatchProofs, chBufferSize)
+	p.assignmentExpiredCh = make(chan metadata.TaikoBlockMetaData, chBufferSize)
+	p.proofSubmissionCh = make(chan *proofProducer.ProofRequestBody, chBufferSize)
+	p.proofContestCh = make(chan *proofProducer.ContestRequestBody, chBufferSize)
 	p.proveNotify = make(chan struct{}, 1)
+	p.aggregationNotify = make(chan uint16, 1)
 
 	if err := p.initL1Current(cfg.StartingBlockID); err != nil {
 		return fmt.Errorf("initialize L1 current cursor error: %w", err)
@@ -166,8 +172,25 @@ func InitFromConfig(ctx context.Context, p *Prover, cfg *Config, txMgr *txmgr.Si
 		}
 	}
 
+	if privateTxMgr != nil {
+		p.privateTxmgr = privateTxMgr
+	} else {
+		if cfg.PrivateTxmgrConfigs != nil && len(cfg.PrivateTxmgrConfigs.L1RPCURL) > 0 {
+			if p.privateTxmgr, err = txmgr.NewSimpleTxManager(
+				"privateMempoolProver",
+				log.Root(),
+				&metrics.TxMgrMetrics,
+				*cfg.PrivateTxmgrConfigs,
+			); err != nil {
+				return err
+			}
+		} else {
+			p.privateTxmgr = nil
+		}
+	}
+
 	// Proof submitters
-	if err := p.initProofSubmitters(p.txmgr, txBuilder, tiers); err != nil {
+	if err := p.initProofSubmitters(txBuilder, tiers); err != nil {
 		return err
 	}
 
@@ -176,29 +199,11 @@ func InitFromConfig(ctx context.Context, p *Prover, cfg *Config, txMgr *txmgr.Si
 		p.rpc,
 		p.cfg.ProveBlockGasLimit,
 		p.txmgr,
+		p.privateTxmgr,
 		p.cfg.ProverSetAddress,
 		p.cfg.Graffiti,
 		txBuilder,
 	)
-
-	// Prover server
-	if p.server, err = server.New(&server.NewProverServerOpts{
-		ProverPrivateKey:     p.cfg.L1ProverPrivKey,
-		ProverSetAddress:     p.cfg.ProverSetAddress,
-		MinOptimisticTierFee: p.cfg.MinOptimisticTierFee,
-		MinSgxTierFee:        p.cfg.MinSgxTierFee,
-		MinSgxAndZkVMTierFee: p.cfg.MinSgxAndZkVMTierFee,
-		MinEthBalance:        p.cfg.MinEthBalance,
-		MinTaikoTokenBalance: p.cfg.MinTaikoTokenBalance,
-		MaxExpiry:            p.cfg.MaxExpiry,
-		MaxBlockSlippage:     p.cfg.MaxBlockSlippage,
-		TaikoL1Address:       p.cfg.TaikoL1Address,
-		RPC:                  p.rpc,
-		ProtocolConfigs:      &protocolConfigs,
-		LivenessBond:         protocolConfigs.LivenessBond,
-	}); err != nil {
-		return err
-	}
 
 	// Guardian prover heartbeat sender
 	if p.IsGuardianProver() && p.cfg.GuardianProverHealthCheckServerEndpoint != nil {
@@ -238,13 +243,6 @@ func (p *Prover) Start() error {
 		}
 	}
 
-	// 2. Start the prover server.
-	go func() {
-		if err := p.server.Start(fmt.Sprintf(":%v", p.cfg.HTTPServerPort)); !errors.Is(err, http.ErrServerClosed) {
-			log.Crit("Failed to start http server", "error", err)
-		}
-	}()
-
 	// 3. Start the guardian prover heartbeat sender if the current prover is a guardian prover.
 	if p.IsGuardianProver() && p.cfg.GuardianProverHealthCheckServerEndpoint != nil {
 		// Send the startup message to the guardian prover health check server.
@@ -281,6 +279,7 @@ func (p *Prover) eventLoop() {
 		default:
 		}
 	}
+
 	// Call reqProving() right away to catch up with the latest state.
 	reqProving()
 
@@ -291,21 +290,21 @@ func (p *Prover) eventLoop() {
 	defer forceProvingTicker.Stop()
 
 	// Channels
-	chBufferSize := p.protocolConfig.BlockMaxProposals
-	blockProposedCh := make(chan *bindings.TaikoL1ClientBlockProposed, chBufferSize)
-	blockVerifiedCh := make(chan *bindings.TaikoL1ClientBlockVerified, chBufferSize)
-	transitionProvedCh := make(chan *bindings.TaikoL1ClientTransitionProved, chBufferSize)
-	transitionContestedCh := make(chan *bindings.TaikoL1ClientTransitionContested, chBufferSize)
+	chBufferSize := p.protocolConfigs.BlockMaxProposals
+	blockProposedV2Ch := make(chan *bindings.TaikoL1ClientBlockProposedV2, chBufferSize)
+	blockVerifiedV2Ch := make(chan *bindings.TaikoL1ClientBlockVerifiedV2, chBufferSize)
+	transitionProvedV2Ch := make(chan *bindings.TaikoL1ClientTransitionProvedV2, chBufferSize)
+	transitionContestedV2Ch := make(chan *bindings.TaikoL1ClientTransitionContestedV2, chBufferSize)
 	// Subscriptions
-	blockProposedSub := rpc.SubscribeBlockProposed(p.rpc.TaikoL1, blockProposedCh)
-	blockVerifiedSub := rpc.SubscribeBlockVerified(p.rpc.TaikoL1, blockVerifiedCh)
-	transitionProvedSub := rpc.SubscribeTransitionProved(p.rpc.TaikoL1, transitionProvedCh)
-	transitionContestedSub := rpc.SubscribeTransitionContested(p.rpc.TaikoL1, transitionContestedCh)
+	blockProposedV2Sub := rpc.SubscribeBlockProposedV2(p.rpc.TaikoL1, blockProposedV2Ch)
+	blockVerifiedV2Sub := rpc.SubscribeBlockVerifiedV2(p.rpc.TaikoL1, blockVerifiedV2Ch)
+	transitionProvedV2Sub := rpc.SubscribeTransitionProvedV2(p.rpc.TaikoL1, transitionProvedV2Ch)
+	transitionContestedV2Sub := rpc.SubscribeTransitionContestedV2(p.rpc.TaikoL1, transitionContestedV2Ch)
 	defer func() {
-		blockProposedSub.Unsubscribe()
-		blockVerifiedSub.Unsubscribe()
-		transitionProvedSub.Unsubscribe()
-		transitionContestedSub.Unsubscribe()
+		blockProposedV2Sub.Unsubscribe()
+		blockVerifiedV2Sub.Unsubscribe()
+		transitionProvedV2Sub.Unsubscribe()
+		transitionContestedV2Sub.Unsubscribe()
 	}()
 
 	for {
@@ -316,21 +315,29 @@ func (p *Prover) eventLoop() {
 			p.withRetry(func() error { return p.contestProofOp(req) })
 		case proofWithHeader := <-p.proofGenerationCh:
 			p.withRetry(func() error { return p.submitProofOp(proofWithHeader) })
+		case batchProof := <-p.batchProofGenerationCh:
+			p.withRetry(func() error { return p.submitProofAggregationOp(batchProof) })
 		case req := <-p.proofSubmissionCh:
-			p.withRetry(func() error { return p.requestProofOp(req.Event, req.Tier) })
+			p.withRetry(func() error { return p.requestProofOp(req.Meta, req.Tier) })
 		case <-p.proveNotify:
 			if err := p.proveOp(); err != nil {
 				log.Error("Prove new blocks error", "error", err)
 			}
-		case e := <-blockVerifiedCh:
+		case tier := <-p.aggregationNotify:
+			p.withRetry(func() error { return p.aggregateOp(tier) })
+		case e := <-blockVerifiedV2Ch:
 			p.blockVerifiedHandler.Handle(e)
-		case e := <-transitionProvedCh:
-			p.withRetry(func() error { return p.transitionProvedHandler.Handle(p.ctx, e) })
-		case e := <-transitionContestedCh:
-			p.withRetry(func() error { return p.transitionContestedHandler.Handle(p.ctx, e) })
-		case e := <-p.assignmentExpiredCh:
-			p.withRetry(func() error { return p.assignmentExpiredHandler.Handle(p.ctx, e) })
-		case <-blockProposedCh:
+		case e := <-transitionProvedV2Ch:
+			p.withRetry(func() error {
+				return p.transitionProvedHandler.Handle(p.ctx, e)
+			})
+		case e := <-transitionContestedV2Ch:
+			p.withRetry(func() error {
+				return p.transitionContestedHandler.Handle(p.ctx, e)
+			})
+		case m := <-p.assignmentExpiredCh:
+			p.withRetry(func() error { return p.assignmentExpiredHandler.Handle(p.ctx, m) })
+		case <-blockProposedV2Ch:
 			reqProving()
 		case <-forceProvingTicker.C:
 			reqProving()
@@ -339,10 +346,7 @@ func (p *Prover) eventLoop() {
 }
 
 // Close closes the prover instance.
-func (p *Prover) Close(ctx context.Context) {
-	if err := p.server.Shutdown(ctx); err != nil {
-		log.Error("Failed to shut down prover server", "error", err)
-	}
+func (p *Prover) Close(_ context.Context) {
 	p.wg.Wait()
 }
 
@@ -363,6 +367,35 @@ func (p *Prover) proveOp() error {
 	return iter.Iter()
 }
 
+// aggregateOp aggregates all proofs in buffer.
+func (p *Prover) aggregateOp(tier uint16) error {
+	g, gCtx := errgroup.WithContext(p.ctx)
+	for _, submitter := range p.proofSubmitters {
+		g.Go(func() error {
+			if submitter.AggregationEnabled() && submitter.Tier() == tier {
+				if err := submitter.AggregateProofs(gCtx); err != nil {
+					log.Error(
+						"Failed to aggregate proofs",
+						"error", err,
+						"tier", submitter.Tier(),
+					)
+					return err
+				}
+			} else {
+				log.Debug(
+					"Skip the current aggregation operation",
+					"requestTier", tier,
+					"submitterTier", submitter.Tier(),
+					"bufferSize", submitter.BufferSize(),
+				)
+			}
+			return nil
+		})
+	}
+
+	return g.Wait()
+}
+
 // contestProofOp performs a proof contest operation.
 func (p *Prover) contestProofOp(req *proofProducer.ContestRequestBody) error {
 	if err := p.proofContester.SubmitContest(
@@ -377,7 +410,7 @@ func (p *Prover) contestProofOp(req *proofProducer.ContestRequestBody) error {
 			log.Error(
 				"Proof contest submission reverted",
 				"blockID", req.BlockID,
-				"minTier", req.Meta.MinTier,
+				"minTier", req.Meta.GetMinTier(),
 				"error", err,
 			)
 			return nil
@@ -385,7 +418,7 @@ func (p *Prover) contestProofOp(req *proofProducer.ContestRequestBody) error {
 		log.Error(
 			"Request new proof contest error",
 			"blockID", req.BlockID,
-			"minTier", req.Meta.MinTier,
+			"minTier", req.Meta.GetMinTier(),
 			"error", err,
 		)
 		return err
@@ -395,7 +428,7 @@ func (p *Prover) contestProofOp(req *proofProducer.ContestRequestBody) error {
 }
 
 // requestProofOp requests a new proof generation operation.
-func (p *Prover) requestProofOp(e *bindings.TaikoL1ClientBlockProposed, minTier uint16) error {
+func (p *Prover) requestProofOp(meta metadata.TaikoBlockMetaData, minTier uint16) error {
 	if p.IsGuardianProver() {
 		if minTier > encoding.TierGuardianMinorityID {
 			minTier = encoding.TierGuardianMajorityID
@@ -404,15 +437,15 @@ func (p *Prover) requestProofOp(e *bindings.TaikoL1ClientBlockProposed, minTier 
 		}
 	}
 	if submitter := p.selectSubmitter(minTier); submitter != nil {
-		if err := submitter.RequestProof(p.ctx, e); err != nil {
-			log.Error("Request new proof error", "blockID", e.BlockId, "minTier", e.Meta.MinTier, "error", err)
+		if err := submitter.RequestProof(p.ctx, meta); err != nil {
+			log.Error("Request new proof error", "blockID", meta.GetBlockID(), "minTier", meta.GetMinTier(), "error", err)
 			return err
 		}
 
 		return nil
 	}
 
-	log.Error("Failed to find proof submitter", "blockID", e.BlockId, "minTier", minTier)
+	log.Error("Failed to find proof submitter", "blockID", meta.GetBlockID(), "minTier", minTier)
 	return nil
 }
 
@@ -428,7 +461,7 @@ func (p *Prover) submitProofOp(proofWithHeader *proofProducer.ProofWithHeader) e
 			log.Error(
 				"Proof submission reverted",
 				"blockID", proofWithHeader.BlockID,
-				"minTier", proofWithHeader.Meta.MinTier,
+				"minTier", proofWithHeader.Meta.GetMinTier(),
 				"error", err,
 			)
 			return nil
@@ -436,7 +469,37 @@ func (p *Prover) submitProofOp(proofWithHeader *proofProducer.ProofWithHeader) e
 		log.Error(
 			"Submit proof error",
 			"blockID", proofWithHeader.BlockID,
-			"minTier", proofWithHeader.Meta.MinTier,
+			"minTier", proofWithHeader.Meta.GetMinTier(),
+			"error", err,
+		)
+		return err
+	}
+
+	return nil
+}
+
+// submitProofsOp performs a batch proof submission operation.
+func (p *Prover) submitProofAggregationOp(batchProof *proofProducer.BatchProofs) error {
+	submitter := p.getSubmitterByTier(batchProof.Tier)
+	if submitter == nil {
+		return nil
+	}
+
+	if err := submitter.BatchSubmitProofs(p.ctx, batchProof); err != nil {
+		if strings.Contains(err.Error(), vm.ErrExecutionReverted.Error()) ||
+			strings.Contains(err.Error(), proofSubmitter.ErrInvalidProof.Error()) {
+			log.Error(
+				"Proof submission reverted",
+				"blockIDs", batchProof.BlockIDs,
+				"tier", batchProof.Tier,
+				"error", err,
+			)
+			return nil
+		}
+		log.Error(
+			"Submit proof error",
+			"blockIDs", batchProof.BlockIDs,
+			"tier", batchProof.Tier,
 			"error", err,
 		)
 		return err
@@ -457,7 +520,6 @@ func (p *Prover) selectSubmitter(minTier uint16) proofSubmitter.Submitter {
 			if !p.IsGuardianProver() && s.Tier() >= encoding.TierGuardianMinorityID {
 				continue
 			}
-
 			log.Debug("Proof submitter selected", "tier", s.Tier(), "minTier", minTier)
 			return s
 		}

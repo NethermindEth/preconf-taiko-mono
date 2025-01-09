@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/log"
 
-	"github.com/taikoxyz/taiko-mono/packages/taiko-client/bindings"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/driver/chain_syncer/beaconsync"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/driver/chain_syncer/blob"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/driver/state"
@@ -49,7 +48,6 @@ func New(
 	maxRetrieveExponent uint64,
 	blobServerEndpoint *url.URL,
 	socialScanEndpoint *url.URL,
-	blockProposedEventChan chan *bindings.TaikoL1ClientBlockProposed,
 ) (*L2ChainSyncer, error) {
 	tracker := beaconsync.NewSyncProgressTracker(rpc.L2, p2pSyncTimeout)
 	go tracker.Track(ctx)
@@ -67,7 +65,6 @@ func New(
 		maxRetrieveExponent,
 		blobServerEndpoint,
 		socialScanEndpoint,
-		blockProposedEventChan,
 	)
 	if err != nil {
 		return nil, err
@@ -185,15 +182,14 @@ func (s *L2ChainSyncer) needNewBeaconSyncTriggered() (uint64, bool, error) {
 
 	// For full sync mode, we will use the verified block head,
 	// and for snap sync mode, we will use the latest block head.
-	var (
-		blockID uint64
-		err     error
-	)
+	var blockID uint64
 	switch s.syncMode {
 	case downloader.SnapSync.String():
-		if blockID, err = s.rpc.L2CheckPoint.BlockNumber(s.ctx); err != nil {
+		headL1Origin, err := s.rpc.L2CheckPoint.HeadL1Origin(s.ctx)
+		if err != nil {
 			return 0, false, err
 		}
+		blockID = headL1Origin.BlockID.Uint64()
 	case downloader.FullSync.String():
 		stateVars, err := s.rpc.GetProtocolStateVariables(&bind.CallOpts{Context: s.ctx})
 		if err != nil {

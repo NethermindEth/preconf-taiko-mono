@@ -3,8 +3,6 @@ package proposer
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"math/big"
-	"net/url"
 	"strings"
 	"time"
 
@@ -14,11 +12,10 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/cmd/flags"
-	"github.com/taikoxyz/taiko-mono/packages/taiko-client/internal/utils"
+	pkgFlags "github.com/taikoxyz/taiko-mono/packages/taiko-client/pkg/flags"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/pkg/jwt"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/pkg/rpc"
-
-	pkgFlags "github.com/taikoxyz/taiko-mono/packages/taiko-client/pkg/flags"
+	"github.com/taikoxyz/taiko-mono/packages/taiko-client/pkg/utils"
 )
 
 // Config contains all configurations to initialize a Taiko proposer.
@@ -32,19 +29,16 @@ type Config struct {
 	LocalAddressesOnly         bool
 	MinGasUsed                 uint64
 	MinTxListBytes             uint64
+	MinTip                     uint64
 	MinProposingInternal       time.Duration
+	AllowZeroInterval          uint64
 	MaxProposedTxListsPerEpoch uint64
 	ProposeBlockTxGasLimit     uint64
-	ProverEndpoints            []*url.URL
-	OptimisticTierFee          *big.Int
-	SgxTierFee                 *big.Int
-	TierFeePriceBump           *big.Int
-	MaxTierFeePriceBumps       uint64
-	IncludeParentMetaHash      bool
 	BlobAllowed                bool
+	FallbackToCalldata         bool
+	RevertProtectionEnabled    bool
 	TxmgrConfigs               *txmgr.CLIConfig
-	L1BlockBuilderTip          *big.Int
-	PreconfirmationRPC         string
+	PrivateTxmgrConfigs        *txmgr.CLIConfig
 }
 
 // NewConfigFromCliContext initializes a Config instance from
@@ -75,29 +69,14 @@ func NewConfigFromCliContext(c *cli.Context) (*Config, error) {
 		}
 	}
 
-	var proverEndpoints []*url.URL
-	for _, e := range strings.Split(c.String(flags.ProverEndpoints.Name), ",") {
-		endpoint, err := url.Parse(e)
-		if err != nil {
-			return nil, err
-		}
-		proverEndpoints = append(proverEndpoints, endpoint)
-	}
-
-	optimisticTierFee, err := utils.GWeiToWei(c.Float64(flags.OptimisticTierFee.Name))
+	minTip, err := utils.GWeiToWei(c.Float64(flags.MinTip.Name))
 	if err != nil {
 		return nil, err
 	}
 
-	sgxTierFee, err := utils.GWeiToWei(c.Float64(flags.SgxTierFee.Name))
-	if err != nil {
-		return nil, err
-	}
-
-	l1RPCUrl := c.String(flags.L1WSEndpoint.Name)
-	preconfirmationRPC := c.String(flags.PreconfirmationRPC.Name)
-	if len(preconfirmationRPC) > 0 {
-		l1RPCUrl = preconfirmationRPC
+	maxProposedTxListsPerEpoch := c.Uint64(flags.MaxProposedTxListsPerEpoch.Name)
+	if maxProposedTxListsPerEpoch > 2 {
+		return nil, fmt.Errorf("max proposed tx lists per epoch should not exceed 2, got: %d", maxProposedTxListsPerEpoch)
 	}
 
 	return &Config{
@@ -120,19 +99,21 @@ func NewConfigFromCliContext(c *cli.Context) (*Config, error) {
 		LocalAddressesOnly:         c.Bool(flags.TxPoolLocalsOnly.Name),
 		MinGasUsed:                 c.Uint64(flags.MinGasUsed.Name),
 		MinTxListBytes:             c.Uint64(flags.MinTxListBytes.Name),
+		MinTip:                     minTip.Uint64(),
 		MinProposingInternal:       c.Duration(flags.MinProposingInternal.Name),
-		MaxProposedTxListsPerEpoch: c.Uint64(flags.MaxProposedTxListsPerEpoch.Name),
+		MaxProposedTxListsPerEpoch: maxProposedTxListsPerEpoch,
+		AllowZeroInterval:          c.Uint64(flags.AllowZeroInterval.Name),
 		ProposeBlockTxGasLimit:     c.Uint64(flags.TxGasLimit.Name),
-		ProverEndpoints:            proverEndpoints,
-		OptimisticTierFee:          optimisticTierFee,
-		SgxTierFee:                 sgxTierFee,
-		TierFeePriceBump:           new(big.Int).SetUint64(c.Uint64(flags.TierFeePriceBump.Name)),
-		MaxTierFeePriceBumps:       c.Uint64(flags.MaxTierFeePriceBumps.Name),
-		IncludeParentMetaHash:      c.Bool(flags.ProposeBlockIncludeParentMetaHash.Name),
 		BlobAllowed:                c.Bool(flags.BlobAllowed.Name),
-		L1BlockBuilderTip:          new(big.Int).SetUint64(c.Uint64(flags.L1BlockBuilderTip.Name)),
+		FallbackToCalldata:         c.Bool(flags.FallbackToCalldata.Name),
+		RevertProtectionEnabled:    c.Bool(flags.RevertProtectionEnabled.Name),
 		TxmgrConfigs: pkgFlags.InitTxmgrConfigsFromCli(
-			l1RPCUrl,
+			c.String(flags.L1WSEndpoint.Name),
+			l1ProposerPrivKey,
+			c,
+		),
+		PrivateTxmgrConfigs: pkgFlags.InitTxmgrConfigsFromCli(
+			c.String(flags.L1PrivateEndpoint.Name),
 			l1ProposerPrivKey,
 			c,
 		),

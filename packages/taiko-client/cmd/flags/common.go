@@ -10,14 +10,13 @@ import (
 )
 
 var (
-	commonCategory     = "COMMON"
-	metricsCategory    = "METRICS"
-	loggingCategory    = "LOGGING"
-	driverCategory     = "DRIVER"
-	proposerCategory   = "PROPOSER"
-	proverCategory     = "PROVER"
-	txmgrCategory      = "TX_MANAGER"
-	preconfAPICategory = "PRECONF_API"
+	commonCategory   = "COMMON"
+	metricsCategory  = "METRICS"
+	loggingCategory  = "LOGGING"
+	driverCategory   = "DRIVER"
+	proposerCategory = "PROPOSER"
+	proverCategory   = "PROVER"
+	txmgrCategory    = "TX_MANAGER"
 )
 
 // Required flags used by all client software.
@@ -29,19 +28,18 @@ var (
 		Category: commonCategory,
 		EnvVars:  []string{"L1_WS"},
 	}
+	L1PrivateEndpoint = &cli.StringFlag{
+		Name:     "l1.private",
+		Usage:    "RPC endpoint of a L1 node with private mempool",
+		Category: commonCategory,
+		EnvVars:  []string{"L1_PRIVATE"},
+	}
 	L2WSEndpoint = &cli.StringFlag{
 		Name:     "l2.ws",
 		Usage:    "Websocket RPC endpoint of a L2 taiko-geth execution engine",
 		Required: true,
 		Category: commonCategory,
 		EnvVars:  []string{"L2_WS"},
-	}
-	L1HTTPEndpoint = &cli.StringFlag{
-		Name:     "l1.http",
-		Usage:    "HTTP RPC endpoint of a L1 ethereum node",
-		Required: true,
-		Category: commonCategory,
-		EnvVars:  []string{"L1_HTTP"},
 	}
 	L1BeaconEndpoint = &cli.StringFlag{
 		Name:     "l1.beacon",
@@ -175,6 +173,7 @@ var CommonFlags = []cli.Flag{
 	BackOffMaxRetries,
 	BackOffRetryInterval,
 	RPCTimeout,
+	L1PrivateEndpoint,
 }
 
 // MergeFlags merges the given flag slices.
