@@ -169,6 +169,7 @@ type RPC struct {
 func (p *RPC) GetL2TxLists(_ *http.Request, _ *Args, reply *RPCReplyL2TxLists) error {
 	txLists, compressedTxLists, err := p.proposer.ProposeOpForTakingL2Blocks(context.Background())
 	if err != nil {
+		log.Error("Failed taking L2 blocks", "error", err)
 		return err
 	}
 	log.Info("Received L2 txLists ", "txListsLength", len(txLists))
@@ -178,6 +179,7 @@ func (p *RPC) GetL2TxLists(_ *http.Request, _ *Args, reply *RPCReplyL2TxLists) e
 
 	parent, err := p.proposer.getParentOfLatestProposedBlock(p.proposer.ctx, p.proposer.rpc)
 	if err != nil {
+		log.Error("Failed fetching parent of latest proposed block", "error", err)
 		return err
 	}
 
@@ -423,7 +425,7 @@ func (p *Proposer) ProposeOpForTakingL2Blocks(ctx context.Context) ([]types.Tran
 
 	txLists, err := p.fetchPoolContent(filterPoolContent)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to fetch pool content: %w", err)
 	}
 
 	// If the pool content is empty, return.
@@ -448,7 +450,7 @@ func (p *Proposer) ProposeOpForTakingL2Blocks(ctx context.Context) ([]types.Tran
 		}
 		compressedTxListBytes, err := utils.Compress(txListBytes)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("failed to compress tx list: %w", err)
 		}
 		compressedTxLists = append(compressedTxLists, compressedTxListBytes)
 		p.lastProposedAt = time.Now() //TODO check if it's correct
