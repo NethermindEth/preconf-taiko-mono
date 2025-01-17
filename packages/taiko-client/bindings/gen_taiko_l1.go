@@ -48,28 +48,24 @@ type TaikoDataBlock struct {
 	ProposedIn           uint64
 	NextTransitionId     uint32
 	VerifiedTransitionId uint32
-	Timestamp            uint64
-	L1StateBlockNumber   uint32
 }
 
 // TaikoDataBlockMetadata is an auto generated low-level Go binding around an user-defined struct.
 type TaikoDataBlockMetadata struct {
-	L1Hash           [32]byte
-	Difficulty       [32]byte
-	BlobHash         [32]byte
-	ExtraData        [32]byte
-	DepositsHash     [32]byte
-	Coinbase         common.Address
-	Id               uint64
-	GasLimit         uint32
-	Timestamp        uint64
-	L1Height         uint64
-	MinTier          uint16
-	BlobUsed         bool
-	ParentMetaHash   [32]byte
-	Sender           common.Address
-	BlobTxListOffset uint32
-	BlobTxListLength uint32
+	L1Hash         [32]byte
+	Difficulty     [32]byte
+	BlobHash       [32]byte
+	ExtraData      [32]byte
+	DepositsHash   [32]byte
+	Coinbase       common.Address
+	Id             uint64
+	GasLimit       uint32
+	Timestamp      uint64
+	L1Height       uint64
+	MinTier        uint16
+	BlobUsed       bool
+	ParentMetaHash [32]byte
+	Sender         common.Address
 }
 
 // TaikoDataBlockMetadataV2 is an auto generated low-level Go binding around an user-defined struct.
@@ -394,7 +390,7 @@ func (_TaikoL1Client *TaikoL1ClientCallerSession) BondBalanceOf(_user common.Add
 
 // GetBlock is a free data retrieval call binding the contract method 0x5fa15e79.
 //
-// Solidity: function getBlock(uint64 _blockId) view returns((bytes32,address,uint96,uint64,uint64,uint64,uint32,uint32,uint64,uint32) blk_)
+// Solidity: function getBlock(uint64 _blockId) view returns((bytes32,address,uint96,uint64,uint64,uint64,uint32,uint32) blk_)
 func (_TaikoL1Client *TaikoL1ClientCaller) GetBlock(opts *bind.CallOpts, _blockId uint64) (TaikoDataBlock, error) {
 	var out []interface{}
 	err := _TaikoL1Client.contract.Call(opts, &out, "getBlock", _blockId)
@@ -411,14 +407,14 @@ func (_TaikoL1Client *TaikoL1ClientCaller) GetBlock(opts *bind.CallOpts, _blockI
 
 // GetBlock is a free data retrieval call binding the contract method 0x5fa15e79.
 //
-// Solidity: function getBlock(uint64 _blockId) view returns((bytes32,address,uint96,uint64,uint64,uint64,uint32,uint32,uint64,uint32) blk_)
+// Solidity: function getBlock(uint64 _blockId) view returns((bytes32,address,uint96,uint64,uint64,uint64,uint32,uint32) blk_)
 func (_TaikoL1Client *TaikoL1ClientSession) GetBlock(_blockId uint64) (TaikoDataBlock, error) {
 	return _TaikoL1Client.Contract.GetBlock(&_TaikoL1Client.CallOpts, _blockId)
 }
 
 // GetBlock is a free data retrieval call binding the contract method 0x5fa15e79.
 //
-// Solidity: function getBlock(uint64 _blockId) view returns((bytes32,address,uint96,uint64,uint64,uint64,uint32,uint32,uint64,uint32) blk_)
+// Solidity: function getBlock(uint64 _blockId) view returns((bytes32,address,uint96,uint64,uint64,uint64,uint32,uint32) blk_)
 func (_TaikoL1Client *TaikoL1ClientCallerSession) GetBlock(_blockId uint64) (TaikoDataBlock, error) {
 	return _TaikoL1Client.Contract.GetBlock(&_TaikoL1Client.CallOpts, _blockId)
 }
@@ -1315,27 +1311,6 @@ func (_TaikoL1Client *TaikoL1ClientTransactorSession) ProposeBlocksV2(_paramsArr
 	return _TaikoL1Client.Contract.ProposeBlocksV2(&_TaikoL1Client.TransactOpts, _paramsArr, _txListArr)
 }
 
-// ProposeBlocks is a paid mutator transaction binding the contract method 0x6c3e4813.
-//
-// Solidity: function proposeBlocks(bytes[] _params, bytes[] _txLists) payable returns((bytes32,bytes32,bytes32,bytes32,bytes32,address,uint64,uint32,uint64,uint64,uint16,bool,bytes32,address,uint32,uint32)[] metas_, (address,uint96,uint64)[][] allDeposits_)
-func (_TaikoL1Client *TaikoL1ClientTransactor) ProposeBlocks(opts *bind.TransactOpts, _params [][]byte, _txLists [][]byte) (*types.Transaction, error) {
-	return _TaikoL1Client.contract.Transact(opts, "proposeBlocks", _params, _txLists)
-}
-
-// ProposeBlocks is a paid mutator transaction binding the contract method 0x6c3e4813.
-//
-// Solidity: function proposeBlocks(bytes[] _params, bytes[] _txLists) payable returns((bytes32,bytes32,bytes32,bytes32,bytes32,address,uint64,uint32,uint64,uint64,uint16,bool,bytes32,address,uint32,uint32)[] metas_, (address,uint96,uint64)[][] allDeposits_)
-func (_TaikoL1Client *TaikoL1ClientSession) ProposeBlocks(_params [][]byte, _txLists [][]byte) (*types.Transaction, error) {
-	return _TaikoL1Client.Contract.ProposeBlocks(&_TaikoL1Client.TransactOpts, _params, _txLists)
-}
-
-// ProposeBlocks is a paid mutator transaction binding the contract method 0x6c3e4813.
-//
-// Solidity: function proposeBlocks(bytes[] _params, bytes[] _txLists) payable returns((bytes32,bytes32,bytes32,bytes32,bytes32,address,uint64,uint32,uint64,uint64,uint16,bool,bytes32,address,uint32,uint32)[] metas_, (address,uint96,uint64)[][] allDeposits_)
-func (_TaikoL1Client *TaikoL1ClientTransactorSession) ProposeBlocks(_params [][]byte, _txLists [][]byte) (*types.Transaction, error) {
-	return _TaikoL1Client.Contract.ProposeBlocks(&_TaikoL1Client.TransactOpts, _params, _txLists)
-}
-
 // ProveBlock is a paid mutator transaction binding the contract method 0x10d008bd.
 //
 // Solidity: function proveBlock(uint64 _blockId, bytes _input) returns()
@@ -1878,15 +1853,12 @@ type TaikoL1ClientBlockProposed struct {
 	LivenessBond      *big.Int
 	Meta              TaikoDataBlockMetadata
 	DepositsProcessed []TaikoDataEthDeposit
-	BlobTxListOffset  uint32
-	BlobTxListLength  uint32
-	BlobIndex         uint8
 	Raw               types.Log // Blockchain specific contextual infos
 }
 
-// FilterBlockProposed is a free log retrieval operation binding the contract event 0x24227b38f01ef1cc88d5a6fdd74e4ef992b2ecb7eede3d8e4418e758bb25b4c6.
+// FilterBlockProposed is a free log retrieval operation binding the contract event 0xcda4e564245eb15494bc6da29f6a42e1941cf57f5314bf35bab8a1fca0a9c60a.
 //
-// Solidity: event BlockProposed(uint256 indexed blockId, address indexed assignedProver, uint96 livenessBond, (bytes32,bytes32,bytes32,bytes32,bytes32,address,uint64,uint32,uint64,uint64,uint16,bool,bytes32,address,uint32,uint32) meta, (address,uint96,uint64)[] depositsProcessed, uint32 blobTxListOffset, uint32 blobTxListLength, uint8 blobIndex)
+// Solidity: event BlockProposed(uint256 indexed blockId, address indexed assignedProver, uint96 livenessBond, (bytes32,bytes32,bytes32,bytes32,bytes32,address,uint64,uint32,uint64,uint64,uint16,bool,bytes32,address) meta, (address,uint96,uint64)[] depositsProcessed)
 func (_TaikoL1Client *TaikoL1ClientFilterer) FilterBlockProposed(opts *bind.FilterOpts, blockId []*big.Int, assignedProver []common.Address) (*TaikoL1ClientBlockProposedIterator, error) {
 
 	var blockIdRule []interface{}
@@ -1905,9 +1877,9 @@ func (_TaikoL1Client *TaikoL1ClientFilterer) FilterBlockProposed(opts *bind.Filt
 	return &TaikoL1ClientBlockProposedIterator{contract: _TaikoL1Client.contract, event: "BlockProposed", logs: logs, sub: sub}, nil
 }
 
-// WatchBlockProposed is a free log subscription operation binding the contract event 0x24227b38f01ef1cc88d5a6fdd74e4ef992b2ecb7eede3d8e4418e758bb25b4c6.
+// WatchBlockProposed is a free log subscription operation binding the contract event 0xcda4e564245eb15494bc6da29f6a42e1941cf57f5314bf35bab8a1fca0a9c60a.
 //
-// Solidity: event BlockProposed(uint256 indexed blockId, address indexed assignedProver, uint96 livenessBond, (bytes32,bytes32,bytes32,bytes32,bytes32,address,uint64,uint32,uint64,uint64,uint16,bool,bytes32,address,uint32,uint32) meta, (address,uint96,uint64)[] depositsProcessed, uint32 blobTxListOffset, uint32 blobTxListLength, uint8 blobIndex)
+// Solidity: event BlockProposed(uint256 indexed blockId, address indexed assignedProver, uint96 livenessBond, (bytes32,bytes32,bytes32,bytes32,bytes32,address,uint64,uint32,uint64,uint64,uint16,bool,bytes32,address) meta, (address,uint96,uint64)[] depositsProcessed)
 func (_TaikoL1Client *TaikoL1ClientFilterer) WatchBlockProposed(opts *bind.WatchOpts, sink chan<- *TaikoL1ClientBlockProposed, blockId []*big.Int, assignedProver []common.Address) (event.Subscription, error) {
 
 	var blockIdRule []interface{}
@@ -1951,9 +1923,9 @@ func (_TaikoL1Client *TaikoL1ClientFilterer) WatchBlockProposed(opts *bind.Watch
 	}), nil
 }
 
-// ParseBlockProposed is a log parse operation binding the contract event 0x24227b38f01ef1cc88d5a6fdd74e4ef992b2ecb7eede3d8e4418e758bb25b4c6.
+// ParseBlockProposed is a log parse operation binding the contract event 0xcda4e564245eb15494bc6da29f6a42e1941cf57f5314bf35bab8a1fca0a9c60a.
 //
-// Solidity: event BlockProposed(uint256 indexed blockId, address indexed assignedProver, uint96 livenessBond, (bytes32,bytes32,bytes32,bytes32,bytes32,address,uint64,uint32,uint64,uint64,uint16,bool,bytes32,address,uint32,uint32) meta, (address,uint96,uint64)[] depositsProcessed, uint32 blobTxListOffset, uint32 blobTxListLength, uint8 blobIndex)
+// Solidity: event BlockProposed(uint256 indexed blockId, address indexed assignedProver, uint96 livenessBond, (bytes32,bytes32,bytes32,bytes32,bytes32,address,uint64,uint32,uint64,uint64,uint16,bool,bytes32,address) meta, (address,uint96,uint64)[] depositsProcessed)
 func (_TaikoL1Client *TaikoL1ClientFilterer) ParseBlockProposed(log types.Log) (*TaikoL1ClientBlockProposed, error) {
 	event := new(TaikoL1ClientBlockProposed)
 	if err := _TaikoL1Client.contract.UnpackLog(event, "BlockProposed", log); err != nil {
