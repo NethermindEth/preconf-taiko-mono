@@ -2,11 +2,12 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"html"
+	"math"
 	"math/big"
 	"net/http"
 	"strconv"
-	"errors"
 
 	"github.com/cyberhorsey/webutils"
 	"github.com/ethereum/go-ethereum/common"
