@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"net/http"
 	"strconv"
+	"errors"
 
 	"github.com/cyberhorsey/webutils"
 	"github.com/ethereum/go-ethereum/common"
@@ -155,6 +156,9 @@ func (srv *Server) GetEventsByAddress(c echo.Context) error {
 		txIndex, err := strconv.ParseInt(r.Raw.TransactionIndex[2:], 16, 64)
 		if err != nil {
 			return webutils.LogAndRenderErrors(c, http.StatusUnprocessableEntity, err)
+		}
+		if txIndex < 0 || txIndex > math.MaxUint32 {
+			return webutils.LogAndRenderErrors(c, http.StatusUnprocessableEntity, errors.New("transaction index out of range"))
 		}
 
 		sender, err := ethClient.TransactionSender(
