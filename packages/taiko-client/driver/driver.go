@@ -23,6 +23,7 @@ import (
 
 	chainSyncer "github.com/taikoxyz/taiko-mono/packages/taiko-client/driver/chain_syncer"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/driver/state"
+	"github.com/taikoxyz/taiko-mono/packages/taiko-client/internal/version"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/pkg/rpc"
 )
 
@@ -58,6 +59,8 @@ func (d *Driver) InitFromCli(ctx context.Context, c *cli.Context) error {
 
 // InitFromConfig initializes the driver instance based on the given configurations.
 func (d *Driver) InitFromConfig(ctx context.Context, cfg *Config) (err error) {
+	log.Info("Initializing driver", "version", version.CommitVersion())
+
 	d.l1HeadCh = make(chan *types.Header, 1024)
 	d.ctx = ctx
 	d.Config = cfg
