@@ -303,6 +303,27 @@ contract DeployProtocolOnL1 is DeployCapability {
         }
 
         deployProxy({
+            name: "mainnet_taiko",
+            impl: address(new MainnetTaikoL1()),
+            data: abi.encodeCall(
+                TaikoL1.init,
+                (
+                    owner,
+                    rollupAddressManager,
+                    vm.envBytes32("L2_GENESIS_HASH"),
+                    vm.envBool("PAUSE_TAIKO_L1")
+                )
+            )
+        });
+
+        TaikoL1 taikoL1;
+        if (keccak256(abi.encode(vm.envString("TIER_ROUTER"))) == keccak256(abi.encode("devnet"))) {
+            taikoL1 = TaikoL1(address(new DevnetTaikoL1()));
+        } else {
+            taikoL1 = TaikoL1(address(new TaikoL1()));
+        }
+
+        deployProxy({
             name: "taiko",
             impl: address(taikoL1),
             data: abi.encodeCall(

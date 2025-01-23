@@ -164,7 +164,7 @@ func forwardRequest(w http.ResponseWriter, r *http.Request, targetURL *url.URL, 
 
 	// Copy headers from the original request, excluding Accept-Encoding
 	for name, values := range r.Header {
-		log.Printf("proxy req name %s", name)
+		log.Printf("proxy req name %s, value %s", name, values)
 		if name == "Accept-Encoding" {
 			continue
 		}
