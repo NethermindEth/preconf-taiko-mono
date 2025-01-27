@@ -12,7 +12,7 @@ on:
 env:
   DOCKER_REGISTRY: docker.io
   DOCKER_USERNAME: nethswitchboard
-  DOCKER_REPOSITORY_DEV: taiko-protocol-dev
+  DOCKER_REPOSITORY_DEV: preconf-taiko-protocol
 
 jobs:
   build:
