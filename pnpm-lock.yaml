@@ -36,7 +36,7 @@ importers:
         version: 2.6.2(@types/react@18.3.3)(react@18.3.1)
       '@web3modal/wagmi':
         specifier: ^4.1.11
-        version: 4.2.3(y7mgkqk423lekayruuohwc7cly)
+        version: 4.2.3(d980f626e3d498ad111134fcae5e861a)
       '@zerodevx/svelte-toast':
         specifier: ^0.9.5
         version: 0.9.5(svelte@4.2.18)
@@ -443,14 +443,14 @@ importers:
         specifier: github:taikoxyz/p256-verifier#v0.1.0
         version: p256-verifier#v0.1.0@https://codeload.github.com/taikoxyz/p256-verifier/tar.gz/6ef45b117642786b08a37b4c37c6a6ce151166da
       risc0-ethereum:
-        specifier: github:risc0/risc0-ethereum#v1.1.2
-        version: risc0-ethereum#v1.1.2@https://codeload.github.com/risc0/risc0-ethereum/tar.gz/b8a14213d92fff07dacda993804e7edb7946ca58
+        specifier: github:risc0/risc0-ethereum#v1.2.0
+        version: risc0-ethereum#v1.2.0@https://codeload.github.com/risc0/risc0-ethereum/tar.gz/3c1fd2a859e40ea009a580aac294191196968c60
       solady:
         specifier: github:Vectorized/solady#v0.0.231
         version: https://codeload.github.com/Vectorized/solady/tar.gz/a12a2575c899a328c1bafdada632dabbff27cf6b
       sp1-contracts:
-        specifier: github:succinctlabs/sp1-contracts#v3.0.0
-        version: sp1-contracts#v3.0.0@https://codeload.github.com/succinctlabs/sp1-contracts/tar.gz/1c4acaeab86789995ae5c6baced66f81e4a57f4d
+        specifier: github:succinctlabs/sp1-contracts#v4.0.0-rc.3
+        version: sp1-contracts#v4.0.0-rc.3@https://codeload.github.com/succinctlabs/sp1-contracts/tar.gz/0885c34b525708ed5f7e87a3d7b20c42564b4c00
     devDependencies:
       '@types/node':
         specifier: ^20.11.30
@@ -522,7 +522,7 @@ importers:
         version: 4.2.3
       '@web3modal/wagmi':
         specifier: ^4.2.2
-        version: 4.2.3(rm2vv2r2k5dixrmbzlzmwncctu)
+        version: 4.2.3(b225517c425f7814296b2efac4e3ddf7)
       '@zerodevx/svelte-toast':
         specifier: ^0.9.5
         version: 0.9.5(svelte@4.2.18)
@@ -751,7 +751,7 @@ importers:
         version: 4.2.3
       '@web3modal/wagmi':
         specifier: ^4.1.1
-        version: 4.2.3(dwryr4zipdd5cpgix7edkuzh34)
+        version: 4.2.3(0be1549ba786d2a105c83dc9911b9657)
       '@zerodevx/svelte-toast':
         specifier: ^0.9.5
         version: 0.9.5(svelte@4.2.18)
@@ -10576,8 +10576,8 @@ packages:
   ripemd160@2.0.2:
     resolution: {integrity: sha512-ii4iagi25WusVoiC4B4lq7pbXfAp3D9v5CwfkY33vffw2+pkDjY1D8GaN7spsxvCSx8dkPqOZCEZyfxcmJG2IA==}
 
-  risc0-ethereum#v1.1.2@https://codeload.github.com/risc0/risc0-ethereum/tar.gz/b8a14213d92fff07dacda993804e7edb7946ca58:
-    resolution: {tarball: https://codeload.github.com/risc0/risc0-ethereum/tar.gz/b8a14213d92fff07dacda993804e7edb7946ca58}
+  risc0-ethereum#v1.2.0@https://codeload.github.com/risc0/risc0-ethereum/tar.gz/3c1fd2a859e40ea009a580aac294191196968c60:
+    resolution: {tarball: https://codeload.github.com/risc0/risc0-ethereum/tar.gz/3c1fd2a859e40ea009a580aac294191196968c60}
     version: 0.0.0
 
   rlp@2.2.7:
@@ -10886,8 +10886,8 @@ packages:
     resolution: {integrity: sha512-l3BikUxvPOcn5E74dZiq5BGsTb5yEwhaTSzccU6t4sDOH8NWJCstKO5QT2CvtFoK6F0saL7p9xHAqHOlCPJygA==}
     engines: {node: '>= 8'}
 
-  sp1-contracts#v3.0.0@https://codeload.github.com/succinctlabs/sp1-contracts/tar.gz/1c4acaeab86789995ae5c6baced66f81e4a57f4d:
-    resolution: {tarball: https://codeload.github.com/succinctlabs/sp1-contracts/tar.gz/1c4acaeab86789995ae5c6baced66f81e4a57f4d}
+  sp1-contracts#v4.0.0-rc.3@https://codeload.github.com/succinctlabs/sp1-contracts/tar.gz/0885c34b525708ed5f7e87a3d7b20c42564b4c00:
+    resolution: {tarball: https://codeload.github.com/succinctlabs/sp1-contracts/tar.gz/0885c34b525708ed5f7e87a3d7b20c42564b4c00}
     version: 0.0.0
 
   space-separated-tokens@2.0.2:
@@ -20377,7 +20377,7 @@ snapshots:
       lit: 3.1.0
       qrcode: 1.5.3
 
-  '@web3modal/wagmi@4.2.3(dwryr4zipdd5cpgix7edkuzh34)':
+  '@web3modal/wagmi@4.2.3(0be1549ba786d2a105c83dc9911b9657)':
     dependencies:
       '@wagmi/connectors': 4.3.10(@types/react@18.3.3)(@wagmi/core@2.11.6(@types/react@18.3.3)(bufferutil@4.0.8)(react@18.3.1)(typescript@5.5.3)(utf-8-validate@5.0.10)(viem@2.16.5(bufferutil@4.0.8)(typescript@5.5.3)(utf-8-validate@5.0.10)(zod@3.23.8))(zod@3.23.8))(bufferutil@4.0.8)(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react-i18next@13.5.0(i18next@22.5.1)(react-dom@18.3.1(react@18.3.1))(react-native@0.74.3(@babel/core@7.26.0)(@babel/preset-env@7.24.7(@babel/core@7.26.0))(@types/react@18.3.3)(bufferutil@4.0.8)(encoding@0.1.13)(react@18.3.1)(utf-8-validate@5.0.10))(react@18.3.1))(react-native@0.74.3(@babel/core@7.26.0)(@babel/preset-env@7.24.7(@babel/core@7.26.0))(@types/react@18.3.3)(bufferutil@4.0.8)(encoding@0.1.13)(react@18.3.1)(utf-8-validate@5.0.10))(react@18.3.1)(rollup@4.30.1)(typescript@5.5.3)(utf-8-validate@5.0.10)(viem@2.16.5(bufferutil@4.0.8)(typescript@5.5.3)(utf-8-validate@5.0.10)(zod@3.23.8))(zod@3.23.8)
       '@wagmi/core': 2.11.6(@types/react@18.3.3)(bufferutil@4.0.8)(react@18.3.1)(typescript@5.5.3)(utf-8-validate@5.0.10)(viem@2.16.5(bufferutil@4.0.8)(typescript@5.5.3)(utf-8-validate@5.0.10)(zod@3.23.8))(zod@3.23.8)
@@ -20412,7 +20412,7 @@ snapshots:
       - uWebSockets.js
       - utf-8-validate
 
-  '@web3modal/wagmi@4.2.3(rm2vv2r2k5dixrmbzlzmwncctu)':
+  '@web3modal/wagmi@4.2.3(b225517c425f7814296b2efac4e3ddf7)':
     dependencies:
       '@wagmi/connectors': 5.0.21(@types/react@18.3.3)(@wagmi/core@2.11.6(@types/react@18.3.3)(bufferutil@4.0.8)(react@18.3.1)(typescript@5.5.3)(utf-8-validate@5.0.10)(viem@2.16.5(bufferutil@4.0.8)(typescript@5.5.3)(utf-8-validate@5.0.10)(zod@3.23.8))(zod@3.23.8))(bufferutil@4.0.8)(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react-native@0.74.3(@babel/core@7.26.0)(@babel/preset-env@7.24.7(@babel/core@7.26.0))(@types/react@18.3.3)(bufferutil@4.0.8)(encoding@0.1.13)(react@18.3.1)(utf-8-validate@5.0.10))(react@18.3.1)(rollup@4.30.1)(typescript@5.5.3)(utf-8-validate@5.0.10)(viem@2.16.5(bufferutil@4.0.8)(typescript@5.5.3)(utf-8-validate@5.0.10)(zod@3.23.8))(zod@3.23.8)
       '@wagmi/core': 2.11.6(@types/react@18.3.3)(bufferutil@4.0.8)(react@18.3.1)(typescript@5.5.3)(utf-8-validate@5.0.10)(viem@2.16.5(bufferutil@4.0.8)(typescript@5.5.3)(utf-8-validate@5.0.10)(zod@3.23.8))(zod@3.23.8)
@@ -20447,7 +20447,7 @@ snapshots:
       - uWebSockets.js
       - utf-8-validate
 
-  '@web3modal/wagmi@4.2.3(y7mgkqk423lekayruuohwc7cly)':
+  '@web3modal/wagmi@4.2.3(d980f626e3d498ad111134fcae5e861a)':
     dependencies:
       '@wagmi/connectors': 4.3.10(@types/react@18.3.3)(@wagmi/core@2.11.6(@types/react@18.3.3)(bufferutil@4.0.8)(react@18.3.1)(typescript@5.5.3)(utf-8-validate@5.0.10)(viem@2.16.5(bufferutil@4.0.8)(typescript@5.5.3)(utf-8-validate@5.0.10)(zod@3.23.8))(zod@3.23.8))(bufferutil@4.0.8)(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react-i18next@13.5.0(i18next@23.11.5)(react-dom@18.3.1(react@18.3.1))(react-native@0.74.3(@babel/core@7.26.0)(@babel/preset-env@7.24.7(@babel/core@7.26.0))(@types/react@18.3.3)(bufferutil@4.0.8)(encoding@0.1.13)(react@18.3.1)(utf-8-validate@5.0.10))(react@18.3.1))(react-native@0.74.3(@babel/core@7.26.0)(@babel/preset-env@7.24.7(@babel/core@7.26.0))(@types/react@18.3.3)(bufferutil@4.0.8)(encoding@0.1.13)(react@18.3.1)(utf-8-validate@5.0.10))(react@18.3.1)(rollup@4.30.1)(typescript@5.5.3)(utf-8-validate@5.0.10)(viem@2.16.5(bufferutil@4.0.8)(typescript@5.5.3)(utf-8-validate@5.0.10)(zod@3.23.8))(zod@3.23.8)
       '@wagmi/core': 2.11.6(@types/react@18.3.3)(bufferutil@4.0.8)(react@18.3.1)(typescript@5.5.3)(utf-8-validate@5.0.10)(viem@2.16.5(bufferutil@4.0.8)(typescript@5.5.3)(utf-8-validate@5.0.10)(zod@3.23.8))(zod@3.23.8)
@@ -27098,7 +27098,7 @@ snapshots:
       hash-base: 3.1.0
       inherits: 2.0.4
 
-  risc0-ethereum#v1.1.2@https://codeload.github.com/risc0/risc0-ethereum/tar.gz/b8a14213d92fff07dacda993804e7edb7946ca58: {}
+  risc0-ethereum#v1.2.0@https://codeload.github.com/risc0/risc0-ethereum/tar.gz/3c1fd2a859e40ea009a580aac294191196968c60: {}
 
   rlp@2.2.7:
     dependencies:
@@ -27554,7 +27554,7 @@ snapshots:
 
   source-map@0.7.4: {}
 
-  sp1-contracts#v3.0.0@https://codeload.github.com/succinctlabs/sp1-contracts/tar.gz/1c4acaeab86789995ae5c6baced66f81e4a57f4d: {}
+  sp1-contracts#v4.0.0-rc.3@https://codeload.github.com/succinctlabs/sp1-contracts/tar.gz/0885c34b525708ed5f7e87a3d7b20c42564b4c00: {}
 
   space-separated-tokens@2.0.2: {}
 
