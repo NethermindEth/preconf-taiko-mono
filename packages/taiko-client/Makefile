@@ -7,8 +7,17 @@ LD_FLAGS_ARGS +=-X github.com/taikoxyz/taiko-mono/packages/taiko-client/version.
 LD_FLAGS := -ldflags "$(LD_FLAGS_ARGS)"
 
 build:
+	@echo "Starting build process..."
+	@echo "GIT_COMMIT: $(GIT_COMMIT)"
+	@echo "GIT_DATE: $(GIT_DATE)"
+	@echo "LD_FLAGS: $(LD_FLAGS)"
+	@echo "Current directory: $(shell pwd)"
+	@echo "Go version: $(shell go version)"
+	@echo "Environment variables:"
+	@env
+	@echo "Building taiko-client..."
 	@GO111MODULE=on CGO_CFLAGS="-O -D__BLST_PORTABLE__" CGO_CFLAGS_ALLOW="-O -D__BLST_PORTABLE__" go build -v $(LD_FLAGS) -o bin/taiko-client cmd/main.go
-
+	@echo "Build completed."
 clean:
 	@rm -rf bin/*
 
