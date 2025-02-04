@@ -51,6 +51,8 @@ func (c *Client) ensureGenesisMatched(ctx context.Context) error {
 		return err
 	}
 
+	log.Debug("Node genesis block", "height", nodeGenesis.Number, "hash", nodeGenesis.Hash())
+
 	var (
 		l2GenesisHash common.Hash
 		filterOpts    = &bind.FilterOpts{
@@ -60,6 +62,9 @@ func (c *Client) ensureGenesisMatched(ctx context.Context) error {
 		}
 	)
 
+	log.Debug("Protocol state variables", "genesisHeight",
+		stateVars.A.GenesisHeight, "genesisTimestamp", stateVars.A.GenesisTimestamp)
+
 	protocolConfigs, err := GetProtocolConfigs(c.TaikoL1, &bind.CallOpts{Context: ctxWithTimeout})
 	if err != nil {
 		return fmt.Errorf("error getting protocol configs: %w", err)
@@ -67,6 +72,7 @@ func (c *Client) ensureGenesisMatched(ctx context.Context) error {
 
 	// If chain actives ontake fork from genesis, we need to fetch the genesis block hash from `BlockVerifiedV2` event.
 	if protocolConfigs.OntakeForkHeight == 0 {
+		log.Debug("Fetching genesis block hash from BlockVerifiedV2 event")
 		// Fetch the genesis `BlockVerified2` event.
 		iter, err := c.TaikoL1.FilterBlockVerifiedV2(filterOpts, []*big.Int{common.Big0}, nil)
 		if err != nil {
@@ -74,12 +80,16 @@ func (c *Client) ensureGenesisMatched(ctx context.Context) error {
 		}
 
 		if iter.Next() {
+			log.Debug("Found genesis block hash from BlockVerifiedV2 event", "hash", iter.Event.BlockHash)
 			l2GenesisHash = iter.Event.BlockHash
 		}
 		if iter.Error() != nil {
 			return iter.Error()
 		}
+
+		log.Debug("Done fetching genesis block hash from BlockVerifiedV2 event")
 	} else {
+		log.Debug("Fetching genesis block hash from BlockVerified event")
 		// Fetch the genesis `BlockVerified` event.
 		iter, err := c.TaikoL1.FilterBlockVerified(filterOpts, []*big.Int{common.Big0}, nil)
 		if err != nil {
