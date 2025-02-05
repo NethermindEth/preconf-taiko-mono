@@ -16,7 +16,7 @@ build:
 	@echo "Environment variables:"
 	@env
 	@echo "Building taiko-client..."
-	@GO111MODULE=on CGO_CFLAGS="-O -D__BLST_PORTABLE__" CGO_CFLAGS_ALLOW="-O -D__BLST_PORTABLE__" go build -v $(LD_FLAGS) -o bin/taiko-client cmd/main.go
+	@GO111MODULE=on CGO_CFLAGS="-O -D__BLST_PORTABLE__" CGO_CFLAGS_ALLOW="-O -D__BLST_PORTABLE__" GODEBUG="gocacheverify=1" go build -v $(LD_FLAGS) -o bin/taiko-client cmd/main.go
 	@echo "Build completed."
 clean:
 	@rm -rf bin/*

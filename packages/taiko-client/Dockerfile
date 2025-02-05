@@ -10,7 +10,7 @@ COPY packages/taiko-client/ packages/taiko-client/
 
 WORKDIR /build/packages/taiko-client
 
-RUN make build
+RUN make build VERBOSE=1
 
 FROM alpine:latest
 
