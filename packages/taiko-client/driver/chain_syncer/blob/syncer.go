@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/exp/slog"
-
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/beacon/engine"
@@ -50,6 +48,7 @@ type Syncer struct {
 	maxRetrieveExponent uint64
 	blobDatasource      *rpc.BlobDataSource
 	mutex               sync.Mutex
+	blockMaxGasLimit    uint32
 }
 
 // NewSyncer creates a new syncer instance.
@@ -90,6 +89,7 @@ func NewSyncer(
 			blobServerEndpoint,
 			socialScanEndpoint,
 		),
+		blockMaxGasLimit: protocolConfigs.BlockMaxGasLimit,
 	}, nil
 }
 
@@ -518,6 +518,13 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 	// 	return fmt.Errorf("failed to get L1 height: %w", err)
 	// }
 
+	baseFeeConfig := &bindings.LibSharedDataBaseFeeConfig{
+		GasIssuancePerSecond:   uint32(1000000000),
+		AdjustmentQuotient:     uint8(200),
+		MinGasExcess:           uint64(1000000000),
+		MaxGasIssuancePerBlock: s.blockMaxGasLimit,
+	}
+
 	// Get L2 baseFee
 	var (
 		baseFee *big.Int
@@ -528,13 +535,7 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 		parent,
 		nil,
 		true,
-		// TODO: get from config?
-		&bindings.LibSharedDataBaseFeeConfig{
-			GasIssuancePerSecond:   uint32(1000000000),
-			AdjustmentQuotient:     uint8(200),
-			MinGasExcess:           uint64(1000000000),
-			MaxGasIssuancePerBlock: uint32(1000000000),
-		},
+		baseFeeConfig,
 		uint64(time.Now().Unix()),
 	); err != nil {
 		return err
@@ -550,13 +551,14 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 
 	// Assemble a TaikoL2.anchor transaction
 	l1CurrentBlock := s.state.GetL1Current()
-	anchorTx, err := s.anchorConstructor.AssembleAnchorTx(
+	anchorTx, err := s.anchorConstructor.AssembleAnchorV2Tx(
 		ctx,
 		new(big.Int).SetUint64(l1CurrentBlock.Number.Uint64()),
 		l1CurrentBlock.Hash(),
+		parent.GasUsed,
+		baseFeeConfig,
 		new(big.Int).Add(parent.Number, common.Big1),
 		baseFee,
-		parent.GasUsed,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create TaikoL2.anchor transaction: %w", err)
@@ -565,7 +567,7 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 	// Insert the anchor transaction at the head of the transactions list
 	txList = append([]*types.Transaction{anchorTx}, txList...)
 
-	slog.Debug("Transaction List", "txList", txList)
+	log.Debug("Transaction List", "txList", txList)
 
 	var txListBytes []byte
 	if txListBytes, err = rlp.EncodeToBytes(txList); err != nil {
@@ -573,7 +575,7 @@ func (s *Syncer) insertNewHeadUsingDecodedTxList(
 		return err
 	}
 
-	slog.Debug("txListBytes length", "length", len(txListBytes))
+	log.Debug("txListBytes length", "length", len(txListBytes))
 
 	payload, err := s.createExecutionPayloads(
 		ctx,
