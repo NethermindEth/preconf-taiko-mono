@@ -69,7 +69,7 @@ async function main() {
         __dirname,
         "../data/genesis_config.json",
     );
-    fs.writeFileSync(configJsonSavedPath, JSON.stringify(config));
+    fs.writeFileSync(configJsonSavedPath, JSON.stringify(config, null, 2));
 
     console.log("done");
     console.log(`alloc JSON saved to ${allocSavedPath}`);
