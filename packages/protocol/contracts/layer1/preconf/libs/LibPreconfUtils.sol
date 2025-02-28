@@ -71,15 +71,7 @@ library LibPreconfUtils {
     ///      the time passed since the genesis, and determines the timestamp for the start of
     ///      the current epoch by rounding down to the nearest epoch boundary.
     /// @return The timestamp of the current epoch.
-    function getEpochTimestamp() internal view returns (uint48) {
-        return getEpochTimestamp(0);
-    }
-
-    /// @notice Calculates the timestamp of a future epoch based on the genesis timestamp.
-    /// @param _epochOffset The offset from the current epoch.
-    /// @return The timestamp of the future epoch.
-    function getEpochTimestamp(uint256 _epochOffset) internal view returns (uint48) {
-        uint256 genesisTimestamp = LibPreconfConstants.getGenesisTimestamp(block.chainid);
+    function getEpochTimestamp(uint256 genesisTimestamp) internal view returns (uint256) {
         uint256 timePassed = block.timestamp - genesisTimestamp;
         uint256 timePassedUptoCurrentEpoch = (timePassed / LibPreconfConstants.SECONDS_IN_EPOCH)
             * LibPreconfConstants.SECONDS_IN_EPOCH;
