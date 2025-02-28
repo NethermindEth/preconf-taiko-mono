@@ -104,7 +104,7 @@ contract WhitelistTest is WhitelistTestBase {
         addOperators(operators);
 
         vm.chainId(1); // Use ethereum's beacon genesis
-        uint256 epochOneStart = LibPreconfConstants.getGenesisTimestamp(block.chainid);
+        uint256 epochOneStart = 0; // LibPreconfConstants.getGenesisTimestamp(block.chainid);
         // Current epoch
         uint256 epochTwoStart = epochOneStart + LibPreconfConstants.SECONDS_IN_EPOCH;
 
@@ -137,7 +137,7 @@ contract WhitelistTest is WhitelistTestBase {
         addOperators(operators);
 
         vm.chainId(1); // Use ethereum's beacon genesis
-        uint256 epochOneStart = LibPreconfConstants.getGenesisTimestamp(block.chainid);
+        uint256 epochOneStart = 0; // LibPreconfConstants.getGenesisTimestamp(block.chainid);
         // Current epoch
         uint256 epochTwoStart = epochOneStart + LibPreconfConstants.SECONDS_IN_EPOCH;
 
