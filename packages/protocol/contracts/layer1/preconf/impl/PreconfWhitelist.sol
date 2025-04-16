@@ -31,7 +31,9 @@ contract PreconfWhitelist is EssentialContract, IPreconfWhitelist {
 
     constructor() EssentialContract(address(0)) { }
 
-    function init(address _owner, uint8 _operatorChangeDelay) external initializer {
+    uint256 public genesisTimestamp;
+    function init(address _owner, uint8 _operatorChangeDelay,  uint256 _genesisTimestamp) external initializer {
+        genesisTimestamp = _genesisTimestamp;
         __Essential_init(_owner);
         operatorChangeDelay = _operatorChangeDelay;
         havingPerfectOperators = true;
@@ -157,7 +159,7 @@ contract PreconfWhitelist is EssentialContract, IPreconfWhitelist {
 
     function epochStartTimestamp(uint256 _offset) public view returns (uint64) {
         return uint64(
-            LibPreconfUtils.getEpochTimestamp() + _offset * LibPreconfConstants.SECONDS_IN_EPOCH
+            LibPreconfUtils.getEpochTimestamp(genesisTimestamp) + _offset * LibPreconfConstants.SECONDS_IN_EPOCH
         );
     }
 

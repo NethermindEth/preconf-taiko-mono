@@ -28,7 +28,7 @@ contract TestGenerateGenesis is Test {
     uint256 private pacayaForkHeight = configJSON.readUint(".pacayaForkHeight");
 
     function testSharedContractsDeployment() public {
-        assertEq(block.chainid, 167);
+        assertEq(block.chainid, 167001);
 
         // check bytecode
         checkDeployedCode("ERC20Vault");
@@ -153,7 +153,7 @@ contract TestGenerateGenesis is Test {
                 id: 0,
                 from: address(0),
                 srcChainId: 1,
-                destChainId: 167,
+                destChainId: 167001,
                 srcOwner: address(0),
                 destOwner: address(0),
                 to: address(0),
@@ -181,7 +181,7 @@ contract TestGenerateGenesis is Test {
                 id: 0,
                 from: address(0),
                 srcChainId: 1,
-                destChainId: 167,
+                destChainId: 167001,
                 srcOwner: address(0),
                 destOwner: address(0),
                 to: address(0),

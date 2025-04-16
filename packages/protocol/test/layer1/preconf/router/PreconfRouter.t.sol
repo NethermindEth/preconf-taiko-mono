@@ -15,7 +15,7 @@ contract PreconfRouterTest is PreconfRouterTestBase {
 
         // Setup mock beacon for operator selection
         vm.chainId(1);
-        uint256 epochOneStart = LibPreconfConstants.getGenesisTimestamp(block.chainid);
+        uint256 epochOneStart = 0; // LibPreconfConstants.getGenesisTimestamp(block.chainid);
         // Current epoch
         uint256 epochTwoStart = epochOneStart + LibPreconfConstants.SECONDS_IN_EPOCH;
 
@@ -70,7 +70,7 @@ contract PreconfRouterTest is PreconfRouterTestBase {
 
         // Setup mock beacon for operator selection
         vm.chainId(1);
-        uint256 epochOneStart = LibPreconfConstants.getGenesisTimestamp(block.chainid);
+        uint256 epochOneStart = 0; // LibPreconfConstants.getGenesisTimestamp(block.chainid);
         MockBeaconBlockRoot mockBeacon = new MockBeaconBlockRoot();
         // Current epoch
         uint256 epochTwoStart = epochOneStart + LibPreconfConstants.SECONDS_IN_EPOCH;
@@ -101,7 +101,7 @@ contract PreconfRouterTest is PreconfRouterTestBase {
 
         // Setup mock beacon for operator selection
         vm.chainId(1);
-        uint256 epochOneStart = LibPreconfConstants.getGenesisTimestamp(block.chainid);
+        uint256 epochOneStart = 0; // LibPreconfConstants.getGenesisTimestamp(block.chainid);
         // Current epoch
         uint256 epochTwoStart = epochOneStart + LibPreconfConstants.SECONDS_IN_EPOCH;
 
