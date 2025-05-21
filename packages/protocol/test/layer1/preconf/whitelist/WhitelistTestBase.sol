@@ -14,7 +14,7 @@ abstract contract WhitelistTestBase is Layer1Test {
             deploy({
                 name: "preconf_whitelist",
                 impl: address(new PreconfWhitelist(address(resolver))),
-                data: abi.encodeCall(PreconfWhitelist.init, (whitelistOwner))
+                data: abi.encodeCall(PreconfWhitelist.init, (whitelistOwner, uint256(vm.envUint("GENESIS_TIMESTAMP"))))
             })
         );
     }

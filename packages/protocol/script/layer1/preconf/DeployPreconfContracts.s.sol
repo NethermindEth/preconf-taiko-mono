@@ -27,7 +27,7 @@ contract DeployPreconfContracts is BaseScript {
         deploy(
             LibStrings.B_PRECONF_WHITELIST,
             address(new PreconfWhitelist(sharedResolver)),
-            abi.encodeCall(PreconfWhitelist.init, (contractOwner))
+            abi.encodeCall(PreconfWhitelist.init, (contractOwner, uint256(vm.envUint("GENESIS_TIMESTAMP"))))
         );
 
         // Deploy PreconfRouter

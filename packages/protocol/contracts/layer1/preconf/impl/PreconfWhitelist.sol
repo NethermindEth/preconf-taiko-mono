@@ -21,9 +21,12 @@ contract PreconfWhitelist is EssentialContract, IPreconfWhitelist {
 
     uint256[47] private __gap;
 
+    uint256 public genesisTimestamp;
+
     constructor(address _resolver) EssentialContract(_resolver) { }
 
-    function init(address _owner) external initializer {
+    function init(address _owner, uint256 _genesisTimestamp) external initializer {
+        genesisTimestamp = _genesisTimestamp;
         __Essential_init(_owner);
     }
 
@@ -72,7 +75,7 @@ contract PreconfWhitelist is EssentialContract, IPreconfWhitelist {
 
         // Timestamp at which the last epoch started
         uint256 timestampOfLastEpoch =
-            LibPreconfUtils.getEpochTimestamp() - LibPreconfConstants.SECONDS_IN_EPOCH;
+            LibPreconfUtils.getEpochTimestamp(genesisTimestamp) - LibPreconfConstants.SECONDS_IN_EPOCH;
         // Use the beacon block root at the first block of the last epoch as the
         // source of randomness
         bytes32 randomness = LibPreconfUtils.getBeaconBlockRoot(timestampOfLastEpoch);
@@ -86,7 +89,7 @@ contract PreconfWhitelist is EssentialContract, IPreconfWhitelist {
         require(_operatorCount != 0, InvalidOperatorCount());
 
         // Timestamp at which the current epoch started
-        uint256 timestampOfCurrentEpoch = LibPreconfUtils.getEpochTimestamp();
+        uint256 timestampOfCurrentEpoch = LibPreconfUtils.getEpochTimestamp(genesisTimestamp);
 
         // We can only get the beacon block root of the first block in the current
         // epoch from the second block onward.
