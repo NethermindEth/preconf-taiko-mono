@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/urfave/cli/v2"
 
+	"github.com/ethereum-optimism/optimism/op-service/signer"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/cmd/flags"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/pkg/jwt"
 	"github.com/taikoxyz/taiko-mono/packages/taiko-client/pkg/rpc"
@@ -128,7 +129,9 @@ func NewConfigFromCliContext(c *cli.Context) (*Config, error) {
 	}
 
 	var preconfOperatorAddress common.Address
-	if c.IsSet(p2pFlags.SequencerP2PKeyName) {
+	if c.IsSet(signer.AddressFlagName) {
+		preconfOperatorAddress = common.HexToAddress(c.String(signer.AddressFlagName))
+	} else if c.IsSet(p2pFlags.SequencerP2PKeyName) {
 		sequencerP2PKey, err := crypto.ToECDSA(common.FromHex(c.String(p2pFlags.SequencerP2PKeyName)))
 		if err != nil {
 			return nil, err
@@ -136,6 +139,8 @@ func NewConfigFromCliContext(c *cli.Context) (*Config, error) {
 
 		preconfOperatorAddress = crypto.PubkeyToAddress(sequencerP2PKey.PublicKey)
 	}
+
+	log.Info("PreconfOperatorAddress", "address", preconfOperatorAddress.Hex())
 
 	return &Config{
 		ClientConfig:                  clientConfig,
