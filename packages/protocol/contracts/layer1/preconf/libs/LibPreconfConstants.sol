@@ -11,7 +11,7 @@ library LibPreconfConstants {
     uint256 internal constant ETHEREUM_HELDER_BEACON_GENESIS = 1_718_967_660;
     uint256 internal constant ETHEREUM_HOODI_BEACON_GENESIS = 1_742_213_400;
 
-    uint256 internal constant SECONDS_IN_SLOT = 12;
+    uint256 internal constant SECONDS_IN_SLOT = 3;
     uint256 internal constant SECONDS_IN_EPOCH = SECONDS_IN_SLOT * 32;
     uint256 internal constant TWO_EPOCHS = 2 * SECONDS_IN_EPOCH;
     uint256 internal constant DISPUTE_PERIOD = 2 * SECONDS_IN_EPOCH;
